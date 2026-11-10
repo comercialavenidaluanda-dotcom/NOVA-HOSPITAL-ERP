@@ -112,7 +112,7 @@
   const select=$('organizationSelect');select.innerHTML=userOrganizations.map(x=>`<option value="${esc(x.organization_id)}">${esc(x.display_name||x.legal_name||'Instituição')}</option>`).join('');select.value=currentOrganizationId;
   $('orgLabel').textContent=chosen.display_name||chosen.legal_name||'Instituição';
   await loadInstitutionBlueprint();
-  select.onchange=async()=>{currentOrganizationId=select.value;const item=userOrganizations.find(x=>x.organization_id===currentOrganizationId);$('orgLabel').textContent=item?.display_name||item?.legal_name||'Instituição';await loadInstitutionBlueprint();navigate(currentPage);};
+  select.onchange=async()=>{currentOrganizationId=select.value;activeModuleFilter=null;const item=userOrganizations.find(x=>x.organization_id===currentOrganizationId);$('orgLabel').textContent=item?.display_name||item?.legal_name||'Instituição';await loadInstitutionBlueprint();navigate(currentPage);};
   return chosen;
  }
  async function finishPendingInstitutionRegistration(user){
@@ -235,9 +235,8 @@
   const items=selected.map(code=>({code,...(labels[code]||['▦',code,'Área institucional configurada.','Interface por integrar.'])}));
   const title=institutionBlueprint?.institution_type==='hospital'?'Módulos do Hospital': 'Módulos da Instituição';
   const intro='Áreas apresentadas a partir da configuração guardada para esta instituição. Uma área configurada não significa que todos os seus fluxos já estejam operacionais.';
-  const pending=institutionBlueprint?.provisioning_mode==='manual_confirmation_required'&&!institutionBlueprint?.onboarding_completed;
   return `${pageHead(title,intro)}
-  ${pending?'<div class="notice warn">A configuração hospitalar está guardada, mas o onboarding institucional ainda aguarda confirmação. As áreas seleccionadas são apresentadas abaixo; isso não cria automaticamente departamentos, camas ou dados operacionais.</div>':''}
+  <div class="notice warn">As áreas seleccionadas aparecem conforme o perfil da instituição. A configuração não cria automaticamente departamentos, enfermarias, camas nem registos operacionais.</div>
   <div class="toolbar"><span class="status">${esc(institutionBlueprint?.institution_type||'Tipo por carregar')}</span><span class="status">${configured.length} áreas seleccionadas</span>${activeModuleFilter?'<button class="btn btn-outline small" id="clearModuleFilter">Mostrar todas as áreas</button>':''}</div>
   <div class="module-grid">${items.map(x=>`<div class="module-card"><div class="module-icon">${x[0]}</div><h3>${esc(x[1])}</h3><p>${esc(x[2])}</p><span class="status warn">${esc(x[3])}</span></div>`).join('')||'<div class="empty">Não existem áreas de serviço seleccionadas no perfil institucional. Abra Instituição → Perfil institucional para configurar.</div>'}</div>`;
  }
