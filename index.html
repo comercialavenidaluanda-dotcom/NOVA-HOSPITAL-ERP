@@ -84,7 +84,7 @@
  <button data-page="inpatient"><span class="ico">▤</span>Internamento e camas</button>
  <button data-page="staff"><span class="ico">♧</span>Profissionais</button>
  <button data-page="modules"><span class="ico">▦</span>Todos os módulos</button>
- </nav><div class="sidebar-bottom">Ambiente institucional<br><span id="connectionState">Sessão protegida</span></div></aside>
+ </nav><div id="configuredAreasNav"></div><div class="sidebar-bottom">Ambiente institucional<br><span id="connectionState">Sessão protegida</span></div></aside>
  <main class="main"><header class="topbar"><div><div class="top-title" id="topTitle">Painel geral</div><div class="top-sub">NOVA HOSPITAL ERP · <span id="orgLabel">A carregar instituição</span></div></div><div class="user-area"><select id="organizationSelect" aria-label="Seleccionar instituição" class="org-select"></select><div class="user-email small muted" id="userEmail"></div><div class="avatar" id="avatar">N</div><button class="btn btn-outline small" id="logoutBtn">Sair</button></div></header>
  <div class="content" id="pageContent"></div></main>
 </section>
@@ -94,7 +94,7 @@
 (() => {
  const PROJECT_URL='https://kpeoczaqxucumgunfweq.supabase.co';
  const DEFAULT_PUBLISHABLE_KEY='sb_publishable_9R24dJWZvB5fIJI-zUbDcA_dUAxjDSV';
- let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[];
+ let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null;
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const cfg=()=>({key:DEFAULT_PUBLISHABLE_KEY});
@@ -111,7 +111,8 @@
   currentOrganizationId=chosen.organization_id;
   const select=$('organizationSelect');select.innerHTML=userOrganizations.map(x=>`<option value="${esc(x.organization_id)}">${esc(x.display_name||x.legal_name||'Instituição')}</option>`).join('');select.value=currentOrganizationId;
   $('orgLabel').textContent=chosen.display_name||chosen.legal_name||'Instituição';
-  select.onchange=()=>{currentOrganizationId=select.value;const item=userOrganizations.find(x=>x.organization_id===currentOrganizationId);$('orgLabel').textContent=item?.display_name||item?.legal_name||'Instituição';navigate(currentPage);};
+  await loadInstitutionBlueprint();
+  select.onchange=async()=>{currentOrganizationId=select.value;const item=userOrganizations.find(x=>x.organization_id===currentOrganizationId);$('orgLabel').textContent=item?.display_name||item?.legal_name||'Instituição';await loadInstitutionBlueprint();navigate(currentPage);};
   return chosen;
  }
  async function finishPendingInstitutionRegistration(user){
@@ -214,7 +215,32 @@
  function renderPsychology(){return `${pageHead('NOVA Psychology & Development','Clínica independente e departamento hospitalar para crianças, adolescentes e famílias.')}<div class="module-grid"><div class="module-card"><div class="module-icon">🧠</div><h3>Avaliação psicológica</h3><p>Estrutura de avaliações e acompanhamento.</p><span class="status off">Integração de interface pendente</span></div><div class="module-card"><div class="module-icon">📅</div><h3>Agenda e sessões</h3><p>Marcações, disponibilidade e sessões clínicas.</p><span class="status off">Integração de interface pendente</span></div><div class="module-card"><div class="module-icon">👨‍👩‍👧</div><h3>Família e consentimentos</h3><p>Responsáveis legais, vínculos e consentimentos.</p><span class="status off">Integração de interface pendente</span></div></div><div class="notice">As tabelas e funções existentes serão ligadas progressivamente. A aprovação de profissionais permanece sob controlo administrativo.</div>`}
  function renderClinical(){return `${pageHead('Processo clínico','Registos clínicos, diagnósticos, observações, notas, tratamentos e referenciações.')}<div class="module-grid">${[['✚','Episódios clínicos','clinical.encounters'],['▤','Diagnósticos','clinical.diagnoses'],['◉','Observações','clinical.observations'],['✎','Notas clínicas','clinical.clinical_notes'],['♡','Tratamentos','clinical.treatments'],['⇄','Referenciações','clinical.referrals']].map(([i,t,d])=>`<div class="module-card"><div class="module-icon">${i}</div><h3>${t}</h3><p>${d}</p><span class="status off">Interface por integrar</span></div>`).join('')}</div><div class="notice warn">As notas clínicas assinadas têm protecção contra alteração e eliminação directa. A interface respeitará os fluxos de emenda e auditoria.</div>`}
  function renderStaff(){return `${pageHead('Profissionais','Gestão de profissionais, especialidades, serviços e permissões.')}<section class="panel"><h2>Estado do cadastro profissional</h2><p class="muted small">O backend já contém a estrutura hospitalar e de psicologia. A aprovação de profissionais pendentes exige decisão administrativa explícita.</p><div class="notice warn">Nenhum profissional pendente será aprovado automaticamente nesta interface inicial.</div><span class="status">Acesso condicionado por permissões</span></section>`}
- function renderModules(){const items=[['♙','Registo central de pacientes','Cadastro, identificação médica, responsáveis e consentimentos','Disponível no backend'],['☷','Recepção e triagem','Chegada, fila e encaminhamento','RPCs disponíveis'],['♡','Psicologia','Avaliações, planos, sessões e família','Estrutura existente'],['✚','Processo clínico','Episódios, diagnósticos, observações e tratamentos','Estrutura existente'],['▤','Internamento e camas','Enfermarias, quartos, camas, admissões e transferências','Backend implementado'],['⚕','Laboratório (LIS)','Pedidos, colheitas, resultados e validação','Planeado'],['▧','Imagiologia (RIS/PACS)','Pedidos, exames, laudos e imagens','Planeado'],['▥','Farmácia','Prescrição, dispensa e stocks','Planeado'],['₭','Facturação e seguros','Contas, pagamentos, convénios e seguradoras','Planeado'],['▦','Inventário e compras','Armazém, lotes, fornecedores e aquisições','Planeado'],['♧','Bloco operatório','Agenda cirúrgica, equipa e consumíveis','Planeado'],['◈','Banco de sangue','Dadores, componentes e compatibilidade','Planeado']];return `${pageHead('Todos os módulos','Mapa funcional do ERP. Os módulos planeados não são apresentados como já operacionais.')}<div class="module-grid">${items.map(([i,t,d,s])=>`<div class="module-card"><div class="module-icon">${i}</div><h3>${t}</h3><p>${d}</p><span class="status ${s==='Planeado'?'off':s==='Backend implementado'?'':'warn'}">${s}</span></div>`).join('')}</div>`}
+ function renderModules(){
+  const labels={
+   outpatient:['♙','Consulta externa','Consultas, admissões ambulatórias e seguimento.','Cadastro de pacientes disponível; fluxo clínico em integração.'],
+   inpatient:['▤','Internamento e camas','Enfermarias, quartos, camas, admissões, transferências e altas.','Backend de internamento implementado; camas reais dependem de cadastro.'],
+   emergency:['✚','Urgência','Triagem, classificação de risco e atendimento urgente.','Área configurada; interface operacional por integrar.'],
+   surgery:['⚕','Cirurgia / Bloco operatório','Agendamento cirúrgico, equipas, salas e consumíveis.','Área configurada; interface operacional por integrar.'],
+   maternity:['♧','Maternidade','Admissão obstétrica, parto, puerpério e recém-nascido.','Área configurada; interface operacional por integrar.'],
+   pediatrics:['♡','Pediatria','Atendimento pediátrico, acompanhamento e vacinação.','Área configurada; interface operacional por integrar.'],
+   laboratory:['⚗','Laboratório (LIS)','Pedidos, colheitas, processamento, resultados e validação.','Área configurada; LIS por implementar.'],
+   imaging:['▧','Imagiologia (RIS/PACS)','Pedidos, agenda, exames, laudos e arquivo de imagens.','Área configurada; RIS/PACS por implementar.'],
+   pharmacy:['▥','Farmácia','Prescrição, dispensa, stocks, lotes e validade.','Área configurada; gestão farmacêutica por implementar.'],
+   psychology:['🧠','Psicologia','Avaliação, planos terapêuticos, sessões e família.','Estrutura existente; integração da interface em curso.'],
+   rehabilitation:['♿','Reabilitação','Fisioterapia, terapia ocupacional e planos de reabilitação.','Área configurada; interface operacional por integrar.'],
+   home_care:['⌂','Cuidados domiciliários','Visitas, equipas móveis e acompanhamento domiciliário.','Área configurada; interface operacional por integrar.']
+  };
+  const configured=Array.isArray(institutionBlueprint?.service_lines)?institutionBlueprint.service_lines:[];
+  const selected=activeModuleFilter?configured.filter(x=>x===activeModuleFilter):configured;
+  const items=selected.map(code=>({code,...(labels[code]||['▦',code,'Área institucional configurada.','Interface por integrar.'])}));
+  const title=institutionBlueprint?.institution_type==='hospital'?'Módulos do Hospital': 'Módulos da Instituição';
+  const intro='Áreas apresentadas a partir da configuração guardada para esta instituição. Uma área configurada não significa que todos os seus fluxos já estejam operacionais.';
+  const pending=institutionBlueprint?.provisioning_mode==='manual_confirmation_required'&&!institutionBlueprint?.onboarding_completed;
+  return `${pageHead(title,intro)}
+  ${pending?'<div class="notice warn">A configuração hospitalar está guardada, mas o onboarding institucional ainda aguarda confirmação. As áreas seleccionadas são apresentadas abaixo; isso não cria automaticamente departamentos, camas ou dados operacionais.</div>':''}
+  <div class="toolbar"><span class="status">${esc(institutionBlueprint?.institution_type||'Tipo por carregar')}</span><span class="status">${configured.length} áreas seleccionadas</span>${activeModuleFilter?'<button class="btn btn-outline small" id="clearModuleFilter">Mostrar todas as áreas</button>':''}</div>
+  <div class="module-grid">${items.map(x=>`<div class="module-card"><div class="module-icon">${x[0]}</div><h3>${esc(x[1])}</h3><p>${esc(x[2])}</p><span class="status warn">${esc(x[3])}</span></div>`).join('')||'<div class="empty">Não existem áreas de serviço seleccionadas no perfil institucional. Abra Instituição → Perfil institucional para configurar.</div>'}</div>`;
+ }
  const renderers={overview:renderOverview,onboarding:renderOnboarding,patients:renderPatients,reception:renderReception,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,modules:renderModules};
  const titles={overview:'Painel geral',onboarding:'Instituição',patients:'Pacientes',reception:'Recepção',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',modules:'Todos os módulos'};
  function navigate(page){currentPage=page;$('topTitle').textContent=titles[page]||'NOVA HOSPITAL ERP';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();window.scrollTo(0,0)}
@@ -233,7 +259,8 @@
    if(inpatientService)inpatientService.addEventListener('change',()=>syncInpatient(inpatientService.checked));
    syncInpatient(inpatientChoice.value==='true'||Boolean(inpatientService?.checked));
   }
-  if($('employeeCount')){$('employeeCount').addEventListener('input',updateSize);updateSize();$('capacityForm').addEventListener('submit',saveCapacity);$('loadBlueprint').addEventListener('click',loadBlueprint);}
+  if($('employeeCount')){$('employeeCount').addEventListener('input',updateSize);updateSize();$('capacityForm').addEventListener('submit',saveCapacity);$('loadBlueprint').addEventListener('click',loadBlueprint);loadBlueprint().catch(()=>{});}
+  if($('clearModuleFilter'))$('clearModuleFilter').addEventListener('click',()=>{activeModuleFilter=null;navigate('modules')});
   if($('orgProfileForm')){$('orgProfileForm').addEventListener('submit',saveOrganizationProfile);$('reloadOrgProfile').addEventListener('click',()=>loadOrganizationProfile().catch(()=>{}));loadOrganizationProfile().catch(()=>{});}
    if($('refreshDashboard'))$('refreshDashboard').addEventListener('click',loadDashboardSummary);
    if($('patientSearch'))$('patientSearch').addEventListener('click',searchPatients);
@@ -267,7 +294,21 @@
    }catch(err){$('orgProfileResult').textContent=err.message||'Falha ao actualizar a instituição.';toast(err.message||'Falha ao guardar dados','error')}
    finally{btn.disabled=false}
   }
-  async function loadDashboardSummary(){
+  async function loadInstitutionBlueprint(){
+  institutionBlueprint=null;
+  try{institutionBlueprint=await publicCall('get_organization_capacity_blueprint',{p_organization_id:org()});}
+  catch(err){console.warn('Não foi possível carregar o perfil de áreas da instituição:',err.message||err);}
+  renderConfiguredAreasNav();
+  return institutionBlueprint;
+ }
+ function renderConfiguredAreasNav(){
+  const host=$('configuredAreasNav');if(!host)return;
+  const names={outpatient:'Consulta externa',inpatient:'Internamento',emergency:'Urgência',surgery:'Cirurgia',maternity:'Maternidade',pediatrics:'Pediatria',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',psychology:'Psicologia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'};
+  const codes=Array.isArray(institutionBlueprint?.service_lines)?institutionBlueprint.service_lines:[];
+  host.innerHTML=codes.length?'<div class="nav-label">ÁREAS CONFIGURADAS</div><nav class="nav">'+codes.map(code=>'<button type="button" data-configured-area="'+esc(code)+'"><span class="ico">▦</span>'+esc(names[code]||code)+'</button>').join('')+'<button type="button" data-configured-area="__all"><span class="ico">▤</span>Ver todos os módulos</button></nav>':'';
+  host.querySelectorAll('[data-configured-area]').forEach(btn=>btn.addEventListener('click',()=>{activeModuleFilter=btn.dataset.configuredArea==='__all'?null:btn.dataset.configuredArea;navigate('modules')}));
+ }
+ async function loadDashboardSummary(){
    const status=$('dashboardStatus');if(!status)return;if(!canManageOrganization()){status.textContent='A conta actual não tem permissão para consultar os indicadores administrativos. Entre com o proprietário ou administrador da instituição.';status.className='notice warn';return}status.textContent='A consultar indicadores reais no Supabase…';
    try{const d=await publicCall('get_organization_dashboard_summary',{p_organization_id:org()});
     const values={dashPatients:d.patients,dashEncounters:d.encounters,dashProfessionals:d.professionals,dashAdmissions:d.active_admissions,dashWards:d.wards,dashRooms:d.rooms,dashBeds:d.beds,dashReception:d.reception_visits_today,dashAppointments:d.appointments,dashCapacity:d.capacity_profile_configured?(d.capacity_onboarding_completed?'Concluído':'Por confirmar'):'Por configurar'};
@@ -279,7 +320,7 @@
   }
   async function saveCapacity(e){e.preventDefault();const btn=e.submitter;btn.disabled=true;try{const services=[...document.querySelectorAll('#serviceChoices input:checked')].map(x=>x.value);const inpatient=$('inpatientEnabled').value==='true';if(inpatient!==services.includes('inpatient'))throw new Error('A linha de serviço Internamento tem de corresponder à opção Internamento: Sim/Não.');const args={p_organization_id:org(),p_institution_type:$('institutionType').value,p_employee_count:Number($('employeeCount').value),p_facility_count:Number($('facilityCount').value),p_operating_model:$('operatingModel').value,p_service_lines:services,p_inpatient_enabled:inpatient,p_planned_bed_capacity:inpatient?Number($('bedCapacity').value):null,p_estimated_daily_patients:Number($('dailyPatients').value),p_configuration_notes:$('capacityNotes').value||null};const data=await publicCall('save_organization_capacity_profile',args);$('capacityResult').innerHTML=`<div class="notice">Perfil guardado. Classificação: <b>${esc(data.size_band||data.profile?.size_band||'calculada pelo backend')}</b>. Onboarding concluído: <b>não</b>. É necessária confirmação explícita.</div><button class="btn btn-primary" type="button" id="confirmCapacity">Confirmar configuração institucional</button><div class="small muted" style="margin-top:8px">A confirmação regista a decisão, mas não inicia a criação automática de departamentos, enfermarias ou camas.</div>`;$('confirmCapacity').addEventListener('click',confirmCapacity);toast('Perfil institucional guardado.');}catch(err){$('capacityResult').innerHTML=`<div class="notice error">${esc(err.message||'Falha ao guardar perfil')}</div>`;toast(err.message||'Erro ao guardar','error')}finally{btn.disabled=false}}
  async function confirmCapacity(){const btn=$('confirmCapacity');if(!btn)return;if(!window.confirm('Confirma o perfil institucional guardado? Esta acção marca o onboarding como concluído, mas não cria automaticamente módulos, departamentos ou camas.'))return;btn.disabled=true;try{const data=await publicCall('confirm_organization_capacity_onboarding',{p_organization_id:org()});$('capacityResult').innerHTML=`<div class="notice">Configuração institucional confirmada. Estado: <b>${esc(data.onboarding_completed?'concluído':'registado')}</b>. Provisionamento automático: <b>não iniciado</b>.</div>`;toast('Configuração institucional confirmada.')}catch(err){toast(err.message||'Falha na confirmação','error');btn.disabled=false}}
- async function loadBlueprint(){const el=$('blueprintResult');el.textContent='A consultar configuração no backend…';try{const data=await publicCall('get_organization_capacity_blueprint',{p_organization_id:org()});el.innerHTML=`<pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fb;padding:12px;border-radius:9px">${esc(JSON.stringify(data,null,2))}</pre>`;toast('Configuração consultada.')}catch(err){el.textContent=err.message;toast(err.message,'error')}}
+ async function loadBlueprint(){const el=$('blueprintResult');if(el)el.textContent='A consultar configuração no backend…';try{const data=await publicCall('get_organization_capacity_blueprint',{p_organization_id:org()});institutionBlueprint=data;const set=(id,value)=>{const e=$(id);if(e&&value!==undefined&&value!==null)e.value=String(value)};set('institutionType',data.institution_type);set('employeeCount',data.employee_count);set('facilityCount',data.facility_count);set('operatingModel',data.operating_model);set('inpatientEnabled',data.inpatient_enabled?'true':'false');set('bedCapacity',data.planned_bed_capacity);set('dailyPatients',data.estimated_daily_patients);document.querySelectorAll('#serviceChoices input[type="checkbox"]').forEach(x=>x.checked=(data.service_lines||[]).includes(x.value));if($('bedCapacity'))$('bedCapacity').disabled=!data.inpatient_enabled;if($('sizePreview'))updateSize();renderConfiguredAreasNav();if(el)el.innerHTML='<div class="notice">Perfil carregado do Supabase: <b>'+esc(data.institution_type)+'</b> · '+esc((data.service_lines||[]).length)+' áreas seleccionadas · '+(data.inpatient_enabled?'Internamento activo':'Sem internamento')+'.</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fb;padding:12px;border-radius:9px">'+esc(JSON.stringify(data,null,2))+'</pre>';toast('Configuração institucional carregada.');return data}catch(err){if(el)el.textContent=err.message;toast(err.message,'error');throw err}}
  function isMinorBirthDate(value){if(!value)return false;const d=new Date(value+'T00:00:00');const today=new Date();let age=today.getFullYear()-d.getFullYear();const m=today.getMonth()-d.getMonth();if(m<0||(m===0&&today.getDate()<d.getDate()))age--;return age<18;}
  function syncMinorPatient(){const minor=isMinorBirthDate($('newPatientBirth')?.value);$('minorPatientNotice')?.classList.toggle('hidden',!minor);$('newGuardianName')?.toggleAttribute('required',minor);if($('newGuardianName'))$('newGuardianName').placeholder=minor?'Obrigatório para paciente menor':'Opcional';}
  async function createPatient(e){e.preventDefault();const btn=$('createPatientBtn'),result=$('patientCreateResult');btn.disabled=true;result.innerHTML='<div class="empty">A guardar registo no sistema…</div>';try{
