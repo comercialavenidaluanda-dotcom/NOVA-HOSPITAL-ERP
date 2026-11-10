@@ -23,11 +23,12 @@
   </div>
   <div class="login-panel"><div class="login-card">
     <div class="auth-tabs"><button type="button" class="auth-tab active" id="showLogin">Iniciar sessão</button><button type="button" class="auth-tab" id="showRegister">Registar instituição</button></div>
-    <form id="loginForm" onsubmit="window.novaLoginSubmit(event); return false;">
+    <form id="loginForm" onsubmit="event.preventDefault(); if(typeof window.novaLoginSubmit==='function'){window.novaLoginSubmit(event);}else{var m=document.getElementById('loginFeedback');if(m){m.textContent='O módulo de autenticação não foi carregado. Actualize a página e tente novamente.';m.classList.remove('hidden');}} return false;">
       <h1>Bem-vindo</h1><p class="muted">Entre com a conta associada à sua instituição.</p>
       <div class="field"><label for="email">EMAIL DA CONTA</label><input id="email" type="email" autocomplete="username" placeholder="nome@instituicao.ao" required></div>
       <div class="field"><label for="password">PALAVRA-PASSE</label><input id="password" type="password" autocomplete="current-password" placeholder="A sua palavra-passe" required></div>
       <button class="btn btn-primary full" id="loginBtn" type="submit">Entrar na plataforma</button>
+      <div id="loginFeedback" role="status" aria-live="polite" class="notice hidden" style="margin-top:12px;white-space:normal"></div>
       <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn btn-light small" type="button" id="forgotBtn">Recuperar acesso</button></div>
       <p class="small muted" style="margin-top:20px">O acesso é individual e depende da associação e das permissões atribuídas pela instituição.</p>
     </form>
@@ -99,16 +100,19 @@
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  window.novaLoginSubmit=async function(e){
   if(e)e.preventDefault();
-  const email=$('email').value.trim(),password=$('password').value,btn=$('loginBtn');
-  if(!email||!password){toast('Introduza o email e a palavra-passe.','error');return false;}
+  const email=$('email').value.trim(),password=$('password').value,btn=$('loginBtn'),feedback=$('loginFeedback');
+  if(feedback){feedback.textContent='A autenticar…';feedback.classList.remove('hidden');feedback.style.background='#eef4fb';feedback.style.color='#243b53';}
+  if(!email||!password){if(feedback){feedback.textContent='Introduza o email e a palavra-passe.';feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast('Introduza o email e a palavra-passe.','error');return false;}
   if(btn)btn.disabled=true;
   try{
    supabase=client();
    const {error}=await supabase.auth.signInWithPassword({email,password});
    if(error)throw error;
+   if(feedback)feedback.classList.add('hidden');
    await startApp();
   }catch(err){
-   toast(err.message||'Falha na autenticação. Verifique os dados e tente novamente.','error');
+   const message=err?.message||'Falha na autenticação. Verifique os dados e tente novamente.';
+   if(feedback){feedback.textContent='Não foi possível iniciar sessão: '+message;feedback.classList.remove('hidden');feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast(message,'error');
    $('email').value=email;
    $('password').value=password;
    $('loginForm').classList.remove('hidden');
@@ -116,7 +120,7 @@
    $('email').focus();
   }finally{if(btn)btn.disabled=false;}
   return false;
- };
+ };;
  const cfg=()=>({key:DEFAULT_PUBLISHABLE_KEY});
  const org=()=>currentOrganizationId;
  function toast(msg,kind=''){const t=$('toast');t.textContent=msg;t.className='toast';if(kind==='error')t.style.background='#8e3030';else t.style.background='#17283b';setTimeout(()=>t.classList.add('hidden'),4500)}
@@ -338,7 +342,7 @@
  const capBars=cap.map((x,i)=>{const y=8+i*42,width=(x[1]/capMax)*(cw-cl-cr);return '<text x="'+(cl-10)+'" y="'+(y+17)+'" text-anchor="end" font-size="11" fill="#526579">'+esc(x[0])+'</text><rect x="'+cl+'" y="'+y+'" width="'+(cw-cl-cr)+'" height="21" rx="6" fill="#edf2f7"/><rect x="'+cl+'" y="'+y+'" width="'+width+'" height="21" rx="6" fill="'+['#21b6c7','#2463eb','#15966a','#c17a13'][i]+'"/><text x="'+Math.min(cw-8,cl+width+7)+'" y="'+(y+15)+'" font-size="11" font-weight="700" fill="#26394d">'+x[1]+'</text>'}).join('');
  capacity.innerHTML='<svg class="chart-svg" viewBox="0 0 '+cw+' '+ch+'" role="img" aria-label="Gráfico da estrutura hospitalar">'+capBars+'</svg><div class="chart-legend"><span>As camas apresentadas são camas registadas, não a capacidade planeada.</span></div>';
 }
-function loadDashboardSummary(){
+async function loadDashboardSummary(){
    const status=$('dashboardStatus');if(!status)return;if(!canManageOrganization()){status.textContent='A conta actual não tem permissão para consultar os indicadores administrativos. Entre com o proprietário ou administrador da instituição.';status.className='notice warn';return}status.textContent='A consultar indicadores reais no Supabase…';
    try{const d=await publicCall('get_organization_dashboard_summary',{p_organization_id:org()});
     renderDashboardCharts(d);const values={dashPatients:d.patients,dashEncounters:d.encounters,dashProfessionals:d.professionals,dashAdmissions:d.active_admissions,dashWards:d.wards,dashRooms:d.rooms,dashBeds:d.beds,dashReception:d.reception_visits_today,dashAppointments:d.appointments};
