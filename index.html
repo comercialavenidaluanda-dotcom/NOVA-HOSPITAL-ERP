@@ -411,7 +411,7 @@ async function loadDashboardSummary(){
  }
  function renderReceptionDepartmentOptions(){
   const facilityId=$('receptionFacility').value,ds=receptionDepartments.filter(d=>d.facility_id===facilityId),sel=$('receptionDepartment');
-  sel.innerHTML=ds.map(d=>'<option value="'+esc(d.department_id)+'" data-type="'+esc(d.department_type||'')+'">'+esc(d.department_name)+' · '+esc(d.department_code||'')+'</option>').join('');
+  sel.innerHTML='<option value="">Todos os departamentos — fila geral</option>'+ds.map(d=>'<option value="'+esc(d.department_id)+'" data-type="'+esc(d.department_type||'')+'">'+esc(d.department_name)+' · '+esc(d.department_code||'')+'</option>').join('');
   if($('receptionVisitType').value==='emergency'){const urgent=ds.find(d=>d.department_type==='emergency');if(urgent)sel.value=urgent.department_id;}
  }
  function renderReceptionModuleLinks(){
@@ -449,7 +449,7 @@ async function loadDashboardSummary(){
   e.preventDefault();const btn=$('receptionRegisterVisit'),result=$('receptionWalkinResult');btn.disabled=true;result.innerHTML='<div class="empty">A registar entrada…</div>';
   try{
    const mode=$('receptionPatientMode').value,visitType=$('receptionVisitType').value,dept=$('receptionDepartment').selectedOptions[0];
-   if(!dept||!$('receptionFacility').value)throw new Error('Seleccione a unidade e o departamento.');
+   if(!dept||!dept.value||!$('receptionFacility').value)throw new Error('Seleccione a unidade e o departamento de destino para registar a entrada.');
    if(visitType==='emergency'&&dept.dataset.type!=='emergency')throw new Error('A urgência deve ser encaminhada para o Banco de Urgência.');
    const reason=$('receptionVisitReason').value.trim();if(reason.length<3)throw new Error('Descreva o motivo da visita.');
    let patient={};
