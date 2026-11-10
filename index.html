@@ -417,7 +417,7 @@ async function loadDashboardSummary(){
  function renderReceptionModuleLinks(){
   const host=$('receptionModuleLinks');if(!host)return;
   const map={outpatient:'Consulta externa',inpatient:'Internamento',emergency:'Urgência',surgery:'Bloco operatório',maternity:'Maternidade',pediatrics:'Pediatria',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',psychology:'Psicologia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários',nursing:'Enfermagem'};
-  const codes=[...new Set(receptionDepartments.map(d=>d.department_type).filter(Boolean))];
+  const codes=[...new Set([...(institutionBlueprint?.service_lines||[]),'nursing'])];
   host.innerHTML=codes.map(code=>'<button type="button" class="module-card" data-open-module="'+esc(code)+'"><h3>'+esc(map[code]||code)+'</h3><p>Abrir área operacional</p><span class="status">Departamento activo</span></button>').join('');
   host.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>{activeModuleFilter=el.dataset.openModule;navigate('modules')}));
  }
