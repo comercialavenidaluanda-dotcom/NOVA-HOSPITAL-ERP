@@ -250,6 +250,7 @@
  function renderStaff(){return `${pageHead('Profissionais','Gestão de profissionais, especialidades, serviços e permissões.')}<section class="panel"><h2>Estado do cadastro profissional</h2><p class="muted small">O backend já contém a estrutura hospitalar e de psicologia. A aprovação de profissionais pendentes exige decisão administrativa explícita.</p><div class="notice warn">Nenhum profissional pendente será aprovado automaticamente nesta interface inicial.</div><span class="status">Acesso condicionado por permissões</span></section>`}
  function renderModules(){
   const labels={
+   nursing:['✚','Enfermagem','Cuidados de enfermagem, sinais vitais, administração e planos de cuidados.','Módulo de enfermagem em integração com profissionais e registos autorizados.'],
    outpatient:['♙','Consulta externa','Consultas, admissões ambulatórias e seguimento.','Cadastro de pacientes disponível; fluxo clínico em integração.'],
    inpatient:['▤','Internamento e camas','Enfermarias, quartos, camas, admissões, transferências e altas.','Backend de internamento implementado; camas reais dependem de cadastro.'],
    emergency:['✚','Urgência','Triagem, classificação de risco e atendimento urgente.','Área configurada; interface operacional por integrar.'],
@@ -263,7 +264,7 @@
    rehabilitation:['♿','Reabilitação','Fisioterapia, terapia ocupacional e planos de reabilitação.','Área configurada; interface operacional por integrar.'],
    home_care:['⌂','Cuidados domiciliários','Visitas, equipas móveis e acompanhamento domiciliário.','Área configurada; interface operacional por integrar.']
   };
-  const configured=Array.isArray(institutionBlueprint?.service_lines)?institutionBlueprint.service_lines:[];
+  const configured=Array.isArray(institutionBlueprint?.service_lines)?[...institutionBlueprint.service_lines]:[];if(institutionBlueprint?.institution_type==='hospital'&&!configured.includes('nursing'))configured.push('nursing');
   const selected=activeModuleFilter?configured.filter(x=>x===activeModuleFilter):configured;
   const items=selected.map(code=>({code,...(labels[code]||['▦',code,'Área institucional configurada.','Interface por integrar.'])}));
   const title=institutionBlueprint?.institution_type==='hospital'?'Módulos do Hospital': 'Módulos da Instituição';
@@ -271,7 +272,7 @@
   return `${pageHead(title,intro)}
   <div class="notice warn">As áreas seleccionadas aparecem conforme o perfil da instituição. A configuração não cria automaticamente departamentos, enfermarias, camas nem registos operacionais.</div>
   <div class="toolbar"><span class="status">${esc(institutionBlueprint?.institution_type||'Tipo por carregar')}</span><span class="status">${configured.length} áreas seleccionadas</span>${activeModuleFilter?'<button class="btn btn-outline small" id="clearModuleFilter">Mostrar todas as áreas</button>':''}</div>
-  <div class="module-grid">${items.map(x=>`<div class="module-card"><div class="module-icon">${x[0]}</div><h3>${esc(x[1])}</h3><p>${esc(x[2])}</p><span class="status warn">${esc(x[3])}</span></div>`).join('')||'<div class="empty">Não existem áreas de serviço seleccionadas no perfil institucional. Abra Instituição → Perfil institucional para configurar.</div>'}</div>`;
+  <div class="module-grid">${items.map(x=>`<div class="module-card" data-open-module="${esc(x.code)}" role="button" tabindex="0"><div class="module-icon">${x[0]}</div><h3>${esc(x[1])}</h3><p>${esc(x[2])}</p><span class="status warn">${esc(x[3])}</span></div>`).join('')||'<div class="empty">Não existem áreas de serviço seleccionadas no perfil institucional. Abra Instituição → Perfil institucional para configurar.</div>'}</div>`;
  }
  const renderers={overview:renderOverview,onboarding:renderOnboarding,patients:renderPatients,reception:renderReception,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,modules:renderModules};
  const titles={overview:'Painel geral',onboarding:'Instituição',patients:'Pacientes',reception:'Recepção',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',modules:'Todos os módulos'};
@@ -298,7 +299,15 @@
    if($('patientSearch'))$('patientSearch').addEventListener('click',searchPatients);
   if($('patientQuery'))$('patientQuery').addEventListener('keydown',e=>{if(e.key==='Enter')searchPatients()});
   if($('patientCreateForm')){$('patientCreateForm').addEventListener('submit',createPatient);$('clearPatientForm').addEventListener('click',()=>{$('patientCreateResult').innerHTML='';$('minorPatientNotice').classList.add('hidden')});$('newPatientBirth').addEventListener('change',syncMinorPatient);}
-  if($('receptionClinic')){$('receptionClinic').addEventListener('change',loadReceptionData);$('receptionDate').addEventListener('change',loadReceptionData);$('refreshReception').addEventListener('click',loadReceptionData);loadReceptionClinics().catch(err=>showReceptionError(err));}
+  if($('receptionFacility'))bindReceptionPage();
+  if($('receptionWalkinForm'))$('receptionWalkinForm').addEventListener('submit',submitReceptionWalkin);
+  if($('receptionPatientMode'))$('receptionPatientMode').addEventListener('change',toggleReceptionPatientMode);
+  if($('receptionVisitType'))$('receptionVisitType').addEventListener('change',syncReceptionVisitType);
+  if($('receptionSearchPatient'))$('receptionSearchPatient').addEventListener('click',searchReceptionPatients);
+  if($('receptionPatientSearch'))$('receptionPatientSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchReceptionPatients()}});
+  if($('receptionPatientBirth'))$('receptionPatientBirth').addEventListener('change',syncReceptionMinor);
+  if($('receptionTriageForm'))$('receptionTriageForm').addEventListener('submit',submitReceptionTriage);
+  document.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>{activeModuleFilter=el.dataset.openModule;navigate('modules')}));
  }
  function updateSize(){const n=Number($('employeeCount').value);let label='';if(n>=1&&n<=10)label='Micro instituição · 1–10 colaboradores';else if(n<=50&&n>10)label='Pequena · 11–50 colaboradores';else if(n<=150&&n>50)label='Média · 51–150 colaboradores';else if(n<=500&&n>150)label='Grande · 151–500 colaboradores';else if(n<=1000&&n>500)label='Muito grande · 501–1.000 colaboradores';else if(n>1000)label='Enterprise · 1.001+ colaboradores';$('sizePreview').textContent=label||'Introduza um número válido de colaboradores.'}
  async function loadOrganizationProfile(){
@@ -377,58 +386,118 @@ async function loadDashboardSummary(){
  }catch(err){result.innerHTML='<div class="notice error">'+esc(err.message||'Não foi possível registar o paciente.')+'</div>';toast(err.message||'Falha no registo','error')}finally{btn.disabled=false}}
  async function searchPatients(){const q=$('patientQuery').value.trim(),out=$('patientResults');if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return}out.innerHTML='<div class="empty">A pesquisar…</div>';try{const rows=await call('public','api_search_patient_directory',{p_organization_id:org(),p_query:q,p_limit:30,p_offset:0});if(!rows?.length){out.innerHTML='<div class="empty">Não foram encontrados pacientes ou não existem registos visíveis para esta conta.</div>';return}out.innerHTML=`<table><thead><tr><th>Identificação</th><th>Nome</th><th>Nascimento</th><th>Contacto</th><th>Estado</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.medical_id||r.patient_number)}</td><td>${esc(r.preferred_name||r.full_name)}</td><td>${esc(r.birth_date||'—')}</td><td>${esc(r.contact_phone||'—')}</td><td>${esc(r.record_status||'—')}</td></tr>`).join('')}</tbody></table>`}catch(err){out.innerHTML=`<div class="notice error">Não foi possível consultar o directório. ${esc(err.message)}. Confirme se o schema patient está exposto no Data API e se a conta possui a permissão directory.read.</div>`}}
  function receptionLocalDate(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
- function receptionDateRange(value){const from=new Date(value+'T00:00:00+01:00');const to=new Date(from.getTime()+86400000);return {from:from.toISOString(),to:to.toISOString()}}
- function receptionTime(value){if(!value)return '—';return new Date(value).toLocaleTimeString('pt-AO',{timeZone:'Africa/Luanda',hour:'2-digit',minute:'2-digit'})}
- function receptionDateTime(value){if(!value)return '—';return new Date(value).toLocaleString('pt-AO',{timeZone:'Africa/Luanda',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
- function receptionStatusLabel(value){return ({waiting:'A aguardar',triaged:'Triagem concluída',ready:'Pronto para atendimento',with_professional:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',scheduled:'Marcado',confirmed:'Confirmado',checked_in:'Chegada confirmada'})[value]||value||'Por confirmar'}
- function showReceptionError(err){const status=$('receptionStatus');if(status){status.className='notice error';status.textContent='Não foi possível carregar a recepção: '+(err?.message||'erro desconhecido')}toast(err?.message||'Falha na recepção','error')}
- async function loadReceptionClinics(){
-  const select=$('receptionClinic');if(!select)return;
-  const date=$('receptionDate');if(date&&!date.value)date.value=receptionLocalDate();
-  select.innerHTML='<option value="">A consultar unidades…</option>';
+ function receptionDateRange(value){const from=new Date(value+'T00:00:00+01:00');return {from:from.toISOString(),to:new Date(from.getTime()+86400000).toISOString()}}
+ function receptionTime(value){return value?new Date(value).toLocaleTimeString('pt-AO',{timeZone:'Africa/Luanda',hour:'2-digit',minute:'2-digit'}):'—'}
+ function receptionStatusLabel(value){return ({waiting:'A aguardar',triaged:'Triagem concluída',ready:'Pronto para atendimento',with_professional:'Em atendimento',completed:'Concluído',cancelled:'Cancelado'})[value]||value||'Por confirmar'}
+ function showReceptionError(err){const el=$('receptionStatus');if(el){el.className='notice error';el.textContent='Não foi possível carregar a recepção: '+(err?.message||'erro desconhecido')}toast(err?.message||'Falha na recepção','error')}
+ let receptionDepartments=[],receptionSelectedPatient=null;
+ function bindReceptionPage(){
+  $('receptionDate').value=receptionLocalDate();
+  $('receptionFacility').addEventListener('change',()=>{renderReceptionDepartmentOptions();loadReceptionData()});
+  $('receptionDepartment').addEventListener('change',loadReceptionData);
+  $('receptionDate').addEventListener('change',loadReceptionData);
+  $('refreshReception').addEventListener('click',loadReceptionData);
+  loadReceptionDepartments().catch(showReceptionError);
+ }
+ async function loadReceptionDepartments(){
+  const rows=await publicCall('api_get_reception_departments',{p_organization_id:org()});
+  receptionDepartments=Array.isArray(rows)?rows:[];
+  const facilities=[...new Map(receptionDepartments.map(r=>[r.facility_id,{id:r.facility_id,name:r.facility_name,code:r.facility_code,timezone:r.facility_timezone}])).values()];
+  const fs=$('receptionFacility');
+  if(!facilities.length){fs.innerHTML='<option value="">Sem unidades activas</option>';$('receptionStatus').className='notice warn';$('receptionStatus').textContent='Não existem unidades e departamentos activos ou a conta não tem permissão de recepção.';return}
+  fs.innerHTML=facilities.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+' · '+esc(f.code)+'</option>').join('');
+  fs.value=facilities[0].id;$('receptionTimezone').textContent='Fuso horário: '+(facilities[0].timezone||'Africa/Luanda');
+  renderReceptionDepartmentOptions();renderReceptionModuleLinks();syncReceptionVisitType();await loadReceptionData();
+ }
+ function renderReceptionDepartmentOptions(){
+  const facilityId=$('receptionFacility').value,ds=receptionDepartments.filter(d=>d.facility_id===facilityId),sel=$('receptionDepartment');
+  sel.innerHTML=ds.map(d=>'<option value="'+esc(d.department_id)+'" data-type="'+esc(d.department_type||'')+'">'+esc(d.department_name)+' · '+esc(d.department_code||'')+'</option>').join('');
+  if($('receptionVisitType').value==='emergency'){const urgent=ds.find(d=>d.department_type==='emergency');if(urgent)sel.value=urgent.department_id;}
+ }
+ function renderReceptionModuleLinks(){
+  const host=$('receptionModuleLinks');if(!host)return;
+  const map={outpatient:'Consulta externa',inpatient:'Internamento',emergency:'Urgência',surgery:'Bloco operatório',maternity:'Maternidade',pediatrics:'Pediatria',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',psychology:'Psicologia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários',nursing:'Enfermagem'};
+  const codes=[...new Set(receptionDepartments.map(d=>d.department_type).filter(Boolean))];
+  host.innerHTML=codes.map(code=>'<button type="button" class="module-card" data-open-module="'+esc(code)+'"><h3>'+esc(map[code]||code)+'</h3><p>Abrir área operacional</p><span class="status">Departamento activo</span></button>').join('');
+  host.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>{activeModuleFilter=el.dataset.openModule;navigate('modules')}));
+ }
+ function syncReceptionVisitType(){
+  const emergency=$('receptionVisitType').value==='emergency';$('receptionEmergencyNotice').classList.toggle('hidden',!emergency);
+  if(emergency){const d=receptionDepartments.find(x=>x.facility_id===$('receptionFacility').value&&x.department_type==='emergency');if(d)$('receptionDepartment').value=d.department_id;}
+ }
+ function toggleReceptionPatientMode(){
+  const existing=$('receptionPatientMode').value==='existing';
+  $('receptionNewPatient').classList.toggle('hidden',existing);$('receptionExistingPatient').classList.toggle('hidden',!existing);
+  $('receptionPatientName').required=!existing;receptionSelectedPatient=null;$('receptionSelectedPatientId').value='';$('receptionSelectedPatient').classList.add('hidden');
+ }
+ function syncReceptionMinor(){
+  const birth=$('receptionPatientBirth').value,minor=birth?isMinorBirthDate(birth):false;
+  $('receptionMinorNotice').classList.toggle('hidden',!minor);$('receptionGuardianName').required=minor;
+ }
+ async function searchReceptionPatients(){
+  const q=$('receptionPatientSearch').value.trim(),out=$('receptionPatientSearchResults');
+  if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return}
+  out.innerHTML='<div class="empty">A pesquisar…</div>';
   try{
-   const rows=await publicCall('api_get_reception_clinics',{p_organization_id:org()});
-   if(!Array.isArray(rows)||!rows.length){select.innerHTML='<option value="">Sem clínicas activas</option>';$('receptionStatus').className='notice warn';$('receptionStatus').textContent='Não existem clínicas activas associadas a esta instituição ou a conta não tem permissões de recepção.';$('receptionScheduleResults').innerHTML='<div class="empty">Não há unidades disponíveis para consulta.</div>';return}
-   select.innerHTML=rows.map(c=>'<option value="'+esc(c.clinic_id)+'">'+esc(c.clinic_name)+' · '+esc(c.clinic_code)+'</option>').join('');
-   select.value=rows[0].clinic_id;$('receptionTimezone').textContent='Fuso horário: '+(rows[0].timezone||'Africa/Luanda');
-   await loadReceptionData();
-  }catch(err){select.innerHTML='<option value="">Falha ao carregar unidades</option>';showReceptionError(err)}
+   const rows=await call('public','api_search_patient_directory',{p_organization_id:org(),p_query:q,p_limit:30,p_offset:0});
+   if(!rows?.length){out.innerHTML='<div class="empty">Não foram encontrados pacientes.</div>';return}
+   out.innerHTML='<table><thead><tr><th>Número</th><th>Paciente</th><th>Nascimento</th><th>Contacto</th><th></th></tr></thead><tbody>'+rows.map(p=>'<tr><td>'+esc(p.patient_number||p.medical_id||'—')+'</td><td>'+esc(p.preferred_name||p.full_name)+'</td><td>'+esc(p.birth_date||'—')+'</td><td>'+esc(p.contact_phone||'—')+'</td><td><button type="button" class="btn btn-outline small" data-select-reception-patient="'+esc(p.patient_id)+'" data-patient-name="'+esc(p.preferred_name||p.full_name)+'" data-patient-number="'+esc(p.patient_number||'')+'">Seleccionar</button></td></tr>').join('')+'</tbody></table>';
+   out.querySelectorAll('[data-select-reception-patient]').forEach(btn=>btn.addEventListener('click',()=>{receptionSelectedPatient=btn.dataset.selectReceptionPatient;$('receptionSelectedPatientId').value=receptionSelectedPatient;$('receptionSelectedPatient').classList.remove('hidden');$('receptionSelectedPatient').textContent='Paciente seleccionado: '+btn.dataset.patientName+' · '+btn.dataset.patientNumber;}));
+  }catch(err){out.innerHTML='<div class="notice error">'+esc(err.message||'Falha na pesquisa.')+'</div>'}
+ }
+ async function submitReceptionWalkin(e){
+  e.preventDefault();const btn=$('receptionRegisterVisit'),result=$('receptionWalkinResult');btn.disabled=true;result.innerHTML='<div class="empty">A registar entrada…</div>';
+  try{
+   const mode=$('receptionPatientMode').value,visitType=$('receptionVisitType').value,dept=$('receptionDepartment').selectedOptions[0];
+   if(!dept||!$('receptionFacility').value)throw new Error('Seleccione a unidade e o departamento.');
+   if(visitType==='emergency'&&dept.dataset.type!=='emergency')throw new Error('A urgência deve ser encaminhada para o Banco de Urgência.');
+   const reason=$('receptionVisitReason').value.trim();if(reason.length<3)throw new Error('Descreva o motivo da visita.');
+   let patient={};
+   if(mode==='existing'){if(!receptionSelectedPatient)throw new Error('Pesquise e seleccione um paciente.');patient={patient_id:receptionSelectedPatient};}
+   else{
+    const birth=$('receptionPatientBirth').value||null,minor=birth?isMinorBirthDate(birth):false,guardian=$('receptionGuardianName').value.trim();
+    if(minor&&guardian.length<2)throw new Error('Para pacientes menores, indique o responsável legal.');
+    patient={full_name:$('receptionPatientName').value.trim(),preferred_name:$('receptionPatientPreferred').value.trim()||null,birth_date:birth,sex:$('receptionPatientSex').value||null,phone:$('receptionPatientPhone').value.trim()||null,email:$('receptionPatientEmail').value.trim().toLowerCase()||null,address:{address_line:$('receptionPatientAddress').value.trim()||null,city:$('receptionPatientCity').value.trim()||null,province:$('receptionPatientProvince').value.trim()||null},guardian_full_name:guardian||null,guardian_relationship:guardian?$('receptionGuardianRelationship').value:'unknown',guardian_phone:$('receptionGuardianPhone').value.trim()||null,guardian_email:$('receptionGuardianEmail').value.trim().toLowerCase()||null};
+   }
+   const rows=await publicCall('api_register_reception_walkin',{p_organization_id:org(),p_facility_id:$('receptionFacility').value,p_department_id:$('receptionDepartment').value,p_visit_type:visitType,p_patient:patient,p_visit_reason:reason});
+   const record=Array.isArray(rows)?rows[0]:rows;if(!record?.reception_visit_id)throw new Error('O servidor não confirmou a entrada.');
+   result.innerHTML='<div class="notice">Entrada registada. Paciente: <b>'+esc(record.patient_number||'—')+'</b>. '+(record.requires_legal_review?'A verificação legal do responsável continua pendente.':'')+(visitType==='emergency'?' A aguardar triagem clínica autorizada.':' Encaminhamento registado.')+'</div>';
+   toast(visitType==='emergency'?'Entrada de urgência registada.':'Entrada registada com sucesso.');
+   $('receptionWalkinForm').reset();$('receptionPatientMode').value='new';toggleReceptionPatientMode();syncReceptionMinor();syncReceptionVisitType();await loadReceptionData();
+  }catch(err){result.innerHTML='<div class="notice error">'+esc(err.message||'Não foi possível registar a entrada.')+'</div>';toast(err.message||'Falha no registo.','error')}
+  finally{btn.disabled=false}
  }
  async function loadReceptionData(){
-  const clinicId=$('receptionClinic')?.value,date=$('receptionDate')?.value,out=$('receptionScheduleResults'),status=$('receptionStatus');
-  if(!clinicId||!date||!out)return;
-  out.innerHTML='<div class="empty">A consultar agenda e fila no Supabase…</div>';status.className='notice';status.textContent='A actualizar dados da unidade…';
+  const facilityId=$('receptionFacility')?.value,departmentId=$('receptionDepartment')?.value,date=$('receptionDate')?.value,out=$('receptionScheduleResults'),status=$('receptionStatus');
+  if(!facilityId||!date||!out)return;out.innerHTML='<div class="empty">A consultar fila hospitalar…</div>';status.className='notice';status.textContent='A actualizar fila…';
   try{
-   const range=receptionDateRange(date);
-   const rows=await publicCall('api_get_reception_schedule',{p_clinic_id:clinicId,p_from:range.from,p_to:range.to});
-   renderReceptionSchedule(Array.isArray(rows)?rows:[]);
-   status.className='notice';status.textContent='Dados actualizados a '+new Date().toLocaleTimeString('pt-AO',{timeZone:'Africa/Luanda',hour:'2-digit',minute:'2-digit'})+'. A informação apresentada pertence à unidade seleccionada.';
-  }catch(err){showReceptionError(err);out.innerHTML='<div class="notice error">'+esc(err.message||'Falha ao consultar agenda.')+'</div>'}
+   const range=receptionDateRange(date),rows=await publicCall('api_get_reception_queue',{p_organization_id:org(),p_facility_id:facilityId,p_department_id:departmentId||null,p_from:range.from,p_to:range.to});
+   renderReceptionQueue(Array.isArray(rows)?rows:[]);status.className='notice';status.textContent='Fila actualizada às '+new Date().toLocaleTimeString('pt-AO',{timeZone:'Africa/Luanda',hour:'2-digit',minute:'2-digit'})+'.';
+  }catch(err){showReceptionError(err);out.innerHTML='<div class="notice error">'+esc(err.message||'Falha ao consultar fila.')+'</div>'}
  }
- function renderReceptionSchedule(rows){
+ function renderReceptionQueue(rows){
   const out=$('receptionScheduleResults'),count=$('receptionCount'),stats=$('receptionStats');if(!out)return;
-  const arrivals=rows.filter(r=>Boolean(r.reception_visit_id)).length;
-  const waiting=rows.filter(r=>['waiting','triaged','ready'].includes(r.queue_status)).length;
-  const active=rows.filter(r=>r.queue_status==='with_professional').length;
-  if(stats)stats.innerHTML=stat('Marcações',String(rows.length),'No período seleccionado')+stat('Chegadas',String(arrivals),'Registadas na recepção')+stat('A aguardar',String(waiting),'Na fila de atendimento')+stat('Em atendimento',String(active),'Com profissional');
-  if(count)count.textContent=rows.length+' registo(s)';
-  if(!rows.length){out.innerHTML='<div class="empty">Não existem marcações para esta clínica na data seleccionada. Quando a agenda tiver marcações ligadas ao directório central, elas aparecerão aqui.</div>';return}
-  const actions=r=>{
-   if(!r.reception_visit_id)return '<button class="btn btn-primary small" data-reception-arrival="'+esc(r.appointment_id)+'">Registar chegada</button>';
-   const next={waiting:['triaged','Encaminhar para triagem'],triaged:['ready','Preparar atendimento'],ready:['with_professional','Chamar profissional'],with_professional:['completed','Concluir atendimento']}[r.queue_status];
-   return next?'<button class="btn btn-outline small" data-reception-status="'+esc(r.reception_visit_id)+'" data-next-status="'+next[0]+'">'+next[1]+'</button>':'<span class="small muted">Sem acção pendente</span>';
-  };
-  out.innerHTML='<div class="table-wrap"><table><thead><tr><th>Hora</th><th>Paciente</th><th>Tipo de atendimento</th><th>Sala</th><th>Estado</th><th>Chegada</th><th>Acção</th></tr></thead><tbody>'+rows.map(r=>{
-   const state=r.queue_status||r.appointment_status;
-   const badgeClass=['waiting','triaged','ready'].includes(state)?'warn':(['completed','with_professional'].includes(state)?'':'off');
-   return '<tr><td><b>'+receptionTime(r.starts_at)+'</b><div class="small muted">'+receptionTime(r.ends_at)+'</div></td><td><b>'+esc(r.patient_display_name||'Paciente')+'</b><div class="small muted">'+esc(r.patient_number||'')+'</div></td><td>'+esc(r.appointment_kind||'Consulta')+'</td><td>'+esc(r.room_label||'A definir')+'</td><td><span class="status '+badgeClass+'">'+esc(receptionStatusLabel(state))+'</span></td><td>'+esc(receptionDateTime(r.arrived_at))+'</td><td>'+actions(r)+'</td></tr>';
+  const emergency=rows.filter(r=>r.visit_type==='emergency').length,waiting=rows.filter(r=>['waiting','triaged','ready'].includes(r.queue_status)).length,active=rows.filter(r=>r.queue_status==='with_professional').length;
+  stats.innerHTML=stat('Entradas',String(rows.length),'Registadas no dia')+stat('Urgências',String(emergency),'Entradas no banco de urgência')+stat('A aguardar',String(waiting),'Na fila')+stat('Em atendimento',String(active),'Nos serviços');
+  count.textContent=rows.length+' entrada(s)';
+  if(!rows.length){out.innerHTML='<div class="empty">Ainda não existem entradas para a data seleccionada. Utilize o formulário acima para registar uma chegada.</div>';return}
+  out.innerHTML='<div class="table-wrap"><table><thead><tr><th>Chegada</th><th>Paciente</th><th>Tipo</th><th>Destino</th><th>Triagem</th><th>Estado</th><th>Acção</th></tr></thead><tbody>'+rows.map(r=>{
+   const emergencyVisit=r.visit_type==='emergency',triage=r.triage_status==='pending'?'Pendente':r.triage_status==='assessed'?'Avaliada':'Não aplicável';
+   const next=r.queue_status==='waiting'&&(!emergencyVisit||r.triage_status==='assessed')?['ready','Encaminhar']:r.queue_status==='triaged'?['ready','Preparar atendimento']:r.queue_status==='ready'?['with_professional','Chamar profissional']:r.queue_status==='with_professional'?['completed','Concluir']:null;
+   const action=r.triage_status==='pending'?(r.can_assess_triage?'<button class="btn btn-primary small" data-triage-visit="'+esc(r.reception_visit_id)+'">Avaliar triagem</button>':'<span class="small muted">A aguardar triagem clínica</span>'):(next?'<button class="btn btn-outline small" data-reception-status="'+esc(r.reception_visit_id)+'" data-next-status="'+next[0]+'">'+next[1]+'</button>':'<span class="small muted">Sem acção pendente</span>');
+   return '<tr><td><b>'+receptionTime(r.arrived_at)+'</b></td><td><b>'+esc(r.patient_display_name)+'</b><div class="small muted">'+esc(r.patient_number)+'</div></td><td><span class="status '+(emergencyVisit?'warn':'')+'">'+(emergencyVisit?'Urgência':r.visit_type==='walk_in'?'Sem marcação':'Marcação')+'</span></td><td>'+esc(r.department_name||r.clinic_name||'A definir')+'<div class="small muted">'+esc(r.visit_reason||'')+'</div></td><td><span class="status '+(r.triage_status==='pending'?'warn':'')+'">'+triage+'</span></td><td>'+receptionStatusLabel(r.queue_status)+'</td><td>'+action+'</td></tr>';
   }).join('')+'</tbody></table></div>';
-  out.querySelectorAll('[data-reception-arrival]').forEach(btn=>btn.addEventListener('click',async()=>{
-   btn.disabled=true;try{await call('patient','register_reception_arrival',{p_appointment_id:btn.dataset.receptionArrival,p_guardian_link_id:null,p_reception_note:null});toast('Chegada registada com sucesso.');await loadReceptionData()}catch(err){toast(err.message||'Não foi possível registar a chegada.','error');btn.disabled=false}
-  }));
-  out.querySelectorAll('[data-reception-status]').forEach(btn=>btn.addEventListener('click',async()=>{
-   btn.disabled=true;try{await call('patient','update_reception_visit_status',{p_reception_visit_id:btn.dataset.receptionStatus,p_new_status:btn.dataset.nextStatus,p_reception_note:null});toast('Estado do atendimento actualizado.');await loadReceptionData()}catch(err){toast(err.message||'Não foi possível actualizar o atendimento.','error');btn.disabled=false}
-  }));
+  out.querySelectorAll('[data-reception-status]').forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;try{await call('patient','update_reception_visit_status',{p_reception_visit_id:btn.dataset.receptionStatus,p_new_status:btn.dataset.nextStatus,p_reception_note:null});toast('Estado actualizado.');await loadReceptionData()}catch(err){toast(err.message||'Falha ao actualizar.','error');btn.disabled=false}}));
+  out.querySelectorAll('[data-triage-visit]').forEach(btn=>btn.addEventListener('click',()=>{$('receptionTriageVisitId').value=btn.dataset.triageVisit;$('receptionTriagePanel').classList.remove('hidden');$('receptionTriagePanel').scrollIntoView({behavior:'smooth',block:'start'})}));
+ }
+ async function submitReceptionTriage(e){
+  e.preventDefault();const btn=e.submitter;if(btn)btn.disabled=true;
+  try{
+   const vitals={blood_pressure:$('triageBP').value.trim()||null,heart_rate:$('triageHR').value?Number($('triageHR').value):null,temperature_c:$('triageTemp').value?Number($('triageTemp').value):null,respiratory_rate:$('triageRR').value?Number($('triageRR').value):null,spo2_percent:$('triageSpo2').value?Number($('triageSpo2').value):null,weight_kg:$('triageWeight').value?Number($('triageWeight').value):null};
+   await publicCall('api_assess_reception_triage',{p_reception_visit_id:$('receptionTriageVisitId').value,p_triage_level:$('receptionTriageLevel').value,p_chief_complaint:$('receptionTriageComplaint').value.trim(),p_vital_signs:vitals,p_clinical_observation:$('receptionTriageObservation').value.trim()||null});
+   toast('Triagem registada.');$('receptionTriageForm').reset();$('receptionTriagePanel').classList.add('hidden');await loadReceptionData();
+  }catch(err){toast(err.message||'Falha ao guardar triagem.','error')}
+  finally{if(btn)btn.disabled=false}
  }
 
  async function startApp(preferredOrganizationId=null){
