@@ -264,7 +264,7 @@
  '<div class="field"><label>Cargo / função</label><input id="docSignatoryTitle" maxlength="120"></div></div>'+
  '<button class="btn btn-primary" type="submit">Guardar identidade documental</button></form></section>'+
  '<section class="panel"><h2>Faturação e numeração</h2><p class="muted small">Parâmetros para configurar os documentos financeiros da instituição.</p><form id="invoiceSettingsForm"><div class="form-grid">'+
- '<div class="field"><label>Moeda</label><select id="docCurrency"><option value="AOA">AOA — Kwanza</option><option value="USD">USD — Dólar</option><option value="EUR">EUR — Euro</option></select></div>'+
+ '<div class="field"><label>Moeda fiscal nacional</label><input id="docCurrency" value="AOA — Kwanza angolano" disabled></div>'+
  '<div class="field"><label>Prefixo das faturas</label><input id="invoicePrefix" maxlength="12" value="FT" required></div>'+
  '<div class="field"><label>Próximo número</label><input id="invoiceNextNumber" type="number" min="1" step="1" value="1" required></div>'+
  '<div class="field"><label>NIF / identificação fiscal</label><input id="taxIdentifier" maxlength="80"></div>'+
@@ -274,7 +274,33 @@
  '<div class="field"><label>Aplicar imposto</label><select id="invoiceTaxEnabled"><option value="false">Não — desactivado</option><option value="true">Sim — após validação fiscal</option></select></div></div>'+
  '<div class="notice warn">Não são predefinidos taxas nem regime fiscal. Confirme os requisitos legais aplicáveis antes de activar a tributação ou emitir documentos fiscais.</div>'+
  '<button class="btn btn-primary" type="submit">Guardar definições de faturação</button><span id="invoiceSettingsFeedback" class="small muted"></span></form></section>'+
- '<section class="panel"><h2>Modelos de documentos</h2><p class="muted small">Configure modelos por tipo, numeração, formato e elementos visuais.</p><div id="documentTemplatesList" class="empty">A carregar modelos...</div><div class="divider"></div><h3 id="documentTemplateFormTitle">Adicionar / actualizar modelo</h3>'+
+ '<section class="panel"><h2>Enquadramento fiscal e AGT</h2><p class="muted small">Dados declarados pela instituição. O estado de validação só é oficial mediante comprovativo da AGT.</p><form id="fiscalProfileForm"><div class="form-grid">'+
+'<div class="field"><label>Denominação social</label><input id="docLegalName" maxlength="220"></div>'+
+'<div class="field"><label>Regime de IVA</label><select id="taxRegimeCode"><option value="">Por definir</option><option value="general">Regime Geral</option><option value="simplified">Regime Simplificado</option><option value="exclusion">Regime de Exclusão</option><option value="not_applicable">Não aplicável</option><option value="pending">Em confirmação</option></select></div>'+
+'<div class="field"><label>Situação de cadastro IVA</label><select id="vatRegistrationStatus"><option value="">Por definir</option><option value="registered">Registado</option><option value="not_registered">Não registado</option><option value="exempt">Isento / especial</option><option value="pending">Pendente</option></select></div>'+
+'<div class="field"><label>Código de contribuinte AGT</label><input id="agtTaxpayerCode" maxlength="100"></div>'+
+'<div class="field"><label>Software de facturação</label><input id="fiscalSoftwareName" maxlength="180"></div>'+
+'<div class="field"><label>Versão do software</label><input id="fiscalSoftwareVersion" maxlength="80"></div>'+
+'<div class="field"><label>Estado de validação AGT</label><select id="agtValidationStatus"><option value="not_submitted">Não submetido</option><option value="pending">Em análise</option><option value="validated">Validado (com comprovativo)</option><option value="rejected">Rejeitado</option><option value="expired">Expirado / suspenso</option></select></div>'+
+'<div class="field"><label>Referência oficial AGT</label><input id="agtValidationReference" maxlength="180"></div>'+
+'<div class="field"><label>Data de validação</label><input id="agtValidationDate" type="date"></div>'+
+'<div class="field"><label>Retenção documental (anos)</label><input id="documentRetentionYears" type="number" min="1" max="100"></div>'+
+'<div class="field"><label>Mês inicial do exercício</label><select id="accountingYearStartMonth">'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'">'+['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][i]+'</option>').join('')+'</select></div>'+
+'<div class="field"><label>Fuso horário</label><input id="documentTimezone" value="Africa/Luanda" maxlength="80"></div></div>'+
+'<div class="form-grid"><label><input type="checkbox" id="fiscalElectronicInvoicing"> Facturação electrónica configurada</label><label><input type="checkbox" id="safTAccountingEnabled"> Preparar SAF-T Contabilidade</label><label><input type="checkbox" id="safTInvoiceEnabled"> Preparar SAF-T Facturação</label></div>'+
+'<div class="field wide"><label>Notas legais / referências internas</label><textarea id="legalComplianceNotes" rows="2" maxlength="1500"></textarea></div>'+
+'<div class="notice warn">O NOVA HOSPITAL ERP não está declarado como software validado pela AGT. Não emitir facturas fiscais em produção até validação oficial.</div>'+
+'<button class="btn btn-primary" type="submit">Guardar enquadramento fiscal</button></form></section>'+
+'<section class="panel"><h2>Séries fiscais por exercício</h2><p class="muted small">Séries independentes por tipo de documento e ano. Assinale comunicação AGT apenas após a comunicação real.</p><div id="fiscalSeriesList" class="empty">A carregar séries...</div><div class="divider"></div>'+
+'<form id="fiscalSeriesForm"><div class="form-grid"><div class="field"><label>Tipo de documento</label><select id="fiscalSeriesType"><option value="invoice">Factura</option><option value="invoice_receipt">Factura-recibo</option><option value="receipt">Recibo</option><option value="credit_note">Nota de crédito</option><option value="debit_note">Nota de débito</option><option value="global_invoice">Factura global</option><option value="generic_invoice">Factura genérica</option><option value="self_billing">Auto-facturação</option></select></div>'+
+'<div class="field"><label>Código da série</label><input id="fiscalSeriesCode" maxlength="20" required></div>'+
+'<div class="field"><label>Exercício económico</label><input id="fiscalSeriesYear" type="number" min="2020" max="2100" value="2026" required></div>'+
+'<div class="field"><label>Próximo número</label><input id="fiscalSeriesNext" type="number" min="1" value="1" required></div>'+
+'<div class="field"><label>Referência de comunicação AGT</label><input id="fiscalSeriesAgtRef" maxlength="180"></div>'+
+'<div class="field"><label>Estado</label><select id="fiscalSeriesActive"><option value="true">Activa</option><option value="false">Inactiva</option></select></div></div>'+
+'<label><input type="checkbox" id="fiscalSeriesCommunicated"> Série efectivamente comunicada à AGT</label><div class="toolbar"><button class="btn btn-primary" type="submit">Guardar série fiscal</button><span id="fiscalSeriesFeedback" class="small muted"></span></div></form></section>'+
+'<section class="panel"><h2>Preparação dos módulos futuros</h2><div class="form-grid"><div><b>Aprovisionamento</b><p class="small muted">Requisições, ordens de compra, recepção, guias e fornecedores.</p></div><div><b>Contabilidade</b><p class="small muted">Plano de contas, lançamentos, impostos e SAF-T.</p></div><div><b>Faturação</b><p class="small muted">Facturas, recibos, notas de crédito/débito e pagamentos.</p></div></div><div class="notice">Os módulos utilizarão o mesmo cadastro, séries, arquivo e auditoria. A configuração não significa que estejam operacionais.</div></section>'+
+'<section class="panel"><h2>Modelos de documentos</h2><p class="muted small">Configure modelos por tipo, numeração, formato e elementos visuais.</p><div id="documentTemplatesList" class="empty">A carregar modelos...</div><div class="divider"></div><h3 id="documentTemplateFormTitle">Adicionar / actualizar modelo</h3>'+
  '<form id="documentTemplateForm"><div class="form-grid">'+
  '<div class="field"><label>Código único</label><input id="templateCode" maxlength="40" placeholder="GUIA_TRANSFERENCIA" required></div>'+
  '<div class="field"><label>Nome do documento</label><input id="templateName" maxlength="140" required></div>'+
