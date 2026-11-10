@@ -95,7 +95,7 @@
 (() => {
  const PROJECT_URL='https://kpeoczaqxucumgunfweq.supabase.co';
  const DEFAULT_PUBLISHABLE_KEY='sb_publishable_9R24dJWZvB5fIJI-zUbDcA_dUAxjDSV';
- let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null;
+ let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in';
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  window.novaLoginSubmit=async function(e){
@@ -274,9 +274,34 @@
   <div class="toolbar"><span class="status">${esc(institutionBlueprint?.institution_type||'Tipo por carregar')}</span><span class="status">${configured.length} áreas seleccionadas</span>${activeModuleFilter?'<button class="btn btn-outline small" id="clearModuleFilter">Mostrar todas as áreas</button>':''}</div>
   <div class="module-grid">${items.map(x=>`<div class="module-card" data-open-module="${esc(x.code)}" role="button" tabindex="0"><div class="module-icon">${x[0]}</div><h3>${esc(x[1])}</h3><p>${esc(x[2])}</p><span class="status warn">${esc(x[3])}</span></div>`).join('')||'<div class="empty">Não existem áreas de serviço seleccionadas no perfil institucional. Abra Instituição → Perfil institucional para configurar.</div>'}</div>`;
  }
- const renderers={overview:renderOverview,onboarding:renderOnboarding,patients:renderPatients,reception:renderReception,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,modules:renderModules};
- const titles={overview:'Painel geral',onboarding:'Instituição',patients:'Pacientes',reception:'Recepção',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',modules:'Todos os módulos'};
- function navigate(page){currentPage=page;$('topTitle').textContent=titles[page]||'NOVA HOSPITAL ERP';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();window.scrollTo(0,0)}
+ function openHospitalModule(code){
+  currentModuleCode=code;activeModuleFilter=code;
+  if(code==='inpatient'){navigate('inpatient');return}
+  if(code==='psychology'){navigate('psychology');return}
+  if(code==='clinical'){navigate('clinical');return}
+  if(code==='outpatient'){navigate('patients');return}
+  if(code==='emergency'){receptionPresetVisitType='emergency';navigate('reception');return}
+  navigate('moduleWorkspace');
+ }
+ function renderModuleWorkspace(){
+  const data={
+   nursing:['Enfermagem','Cuidados de enfermagem, avaliação de sinais vitais, planos de cuidados, administração de terapêutica e registos de enfermagem.'],
+   pediatrics:['Pediatria','Atendimento pediátrico, crescimento e desenvolvimento, vacinação, acompanhamento e ligação aos responsáveis.'],
+   surgery:['Cirurgia / Bloco Operatório','Avaliação pré-operatória, programação cirúrgica, equipa, sala, checklist e seguimento pós-operatório.'],
+   maternity:['Maternidade','Admissão obstétrica, acompanhamento da gravidez, parto, puerpério e cuidados ao recém-nascido.'],
+   laboratory:['Laboratório','Pedidos de análises, colheitas, processamento, validação e disponibilização de resultados.'],
+   imaging:['Imagiologia','Pedidos de exames, agenda, execução, laudos e arquivo de imagens.'],
+   pharmacy:['Farmácia','Prescrição, dispensa, gestão de stocks, lotes, validade e rastreabilidade.'],
+   rehabilitation:['Reabilitação','Planos de fisioterapia, terapia ocupacional, sessões e evolução funcional.'],
+   home_care:['Cuidados domiciliários','Planeamento de visitas, equipas móveis e acompanhamento no domicílio.']
+  };
+  const item=data[currentModuleCode]||['Módulo hospitalar','Área assistencial configurada para esta instituição.'];
+  return pageHead(item[0],'Módulo hospitalar · NOVA HOSPITAL ERP')+
+   '<section class="panel"><h2>Área de trabalho</h2><p>'+esc(item[1])+'</p><div class="notice warn">A estrutura e o acesso ao módulo estão disponíveis. Os formulários clínicos, fluxos de trabalho e gravação operacional desta área serão ligados progressivamente aos serviços e permissões do departamento. Não são apresentados registos fictícios.</div><div class="toolbar"><button class="btn btn-primary" data-go="reception">Abrir recepção</button><button class="btn btn-outline" data-go="modules">Voltar a todos os módulos</button><button class="btn btn-outline" data-go="staff">Profissionais e equipa</button></div></section>';
+ }
+ const renderers={overview:renderOverview,onboarding:renderOnboarding,patients:renderPatients,reception:renderReception,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,modules:renderModules,moduleWorkspace:renderModuleWorkspace};
+ const titles={overview:'Painel geral',onboarding:'Instituição',patients:'Pacientes',reception:'Recepção',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
+ function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();window.scrollTo(0,0)}
  function bindPage(){
   document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.go)));
   if($('inpatientEnabled')){
@@ -307,7 +332,7 @@
   if($('receptionPatientSearch'))$('receptionPatientSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchReceptionPatients()}});
   if($('receptionPatientBirth'))$('receptionPatientBirth').addEventListener('change',syncReceptionMinor);
   if($('receptionTriageForm'))$('receptionTriageForm').addEventListener('submit',submitReceptionTriage);
-  document.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>{activeModuleFilter=el.dataset.openModule;navigate('modules')}));
+  document.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>openHospitalModule(el.dataset.openModule)));
  }
  function updateSize(){const n=Number($('employeeCount').value);let label='';if(n>=1&&n<=10)label='Micro instituição · 1–10 colaboradores';else if(n<=50&&n>10)label='Pequena · 11–50 colaboradores';else if(n<=150&&n>50)label='Média · 51–150 colaboradores';else if(n<=500&&n>150)label='Grande · 151–500 colaboradores';else if(n<=1000&&n>500)label='Muito grande · 501–1.000 colaboradores';else if(n>1000)label='Enterprise · 1.001+ colaboradores';$('sizePreview').textContent=label||'Introduza um número válido de colaboradores.'}
  async function loadOrganizationProfile(){
@@ -392,7 +417,7 @@ async function loadDashboardSummary(){
  function showReceptionError(err){const el=$('receptionStatus');if(el){el.className='notice error';el.textContent='Não foi possível carregar a recepção: '+(err?.message||'erro desconhecido')}toast(err?.message||'Falha na recepção','error')}
  let receptionDepartments=[],receptionSelectedPatient=null;
  function bindReceptionPage(){
-  $('receptionDate').value=receptionLocalDate();
+  $('receptionDate').value=receptionLocalDate();if(receptionPresetVisitType==='emergency')$('receptionVisitType').value='emergency';receptionPresetVisitType='walk_in';
   $('receptionFacility').addEventListener('change',()=>{renderReceptionDepartmentOptions();loadReceptionData()});
   $('receptionDepartment').addEventListener('change',loadReceptionData);
   $('receptionDate').addEventListener('change',loadReceptionData);
@@ -419,7 +444,7 @@ async function loadDashboardSummary(){
   const map={outpatient:'Consulta externa',inpatient:'Internamento',emergency:'Urgência',surgery:'Bloco operatório',maternity:'Maternidade',pediatrics:'Pediatria',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',psychology:'Psicologia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários',nursing:'Enfermagem'};
   const codes=[...new Set([...(institutionBlueprint?.service_lines||[]),'nursing'])].filter(code=>code!=='administration');
   host.innerHTML=codes.map(code=>'<button type="button" class="module-card" data-open-module="'+esc(code)+'"><h3>'+esc(map[code]||code)+'</h3><p>Abrir área operacional</p><span class="status">Departamento activo</span></button>').join('');
-  host.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>{activeModuleFilter=el.dataset.openModule;navigate('modules')}));
+  host.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>openHospitalModule(el.dataset.openModule)));
  }
  function syncReceptionVisitType(){
   const emergency=$('receptionVisitType').value==='emergency';$('receptionEmergencyNotice').classList.toggle('hidden',!emergency);
