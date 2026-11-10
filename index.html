@@ -23,7 +23,7 @@
   </div>
   <div class="login-panel"><div class="login-card">
     <div class="auth-tabs"><button type="button" class="auth-tab active" id="showLogin">Iniciar sessão</button><button type="button" class="auth-tab" id="showRegister">Registar instituição</button></div>
-    <form id="loginForm">
+    <form id="loginForm" onsubmit="window.novaLoginSubmit(event); return false;">
       <h1>Bem-vindo</h1><p class="muted">Entre com a conta associada à sua instituição.</p>
       <div class="field"><label for="email">EMAIL DA CONTA</label><input id="email" type="email" autocomplete="username" placeholder="nome@instituicao.ao" required></div>
       <div class="field"><label for="password">PALAVRA-PASSE</label><input id="password" type="password" autocomplete="current-password" placeholder="A sua palavra-passe" required></div>
@@ -97,6 +97,26 @@
  let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null;
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ window.novaLoginSubmit=async function(e){
+  if(e)e.preventDefault();
+  const email=$('email').value.trim(),password=$('password').value,btn=$('loginBtn');
+  if(!email||!password){toast('Introduza o email e a palavra-passe.','error');return false;}
+  if(btn)btn.disabled=true;
+  try{
+   supabase=client();
+   const {error}=await supabase.auth.signInWithPassword({email,password});
+   if(error)throw error;
+   await startApp();
+  }catch(err){
+   toast(err.message||'Falha na autenticação. Verifique os dados e tente novamente.','error');
+   $('email').value=email;
+   $('password').value=password;
+   $('loginForm').classList.remove('hidden');
+   $('loginScreen').classList.remove('hidden');
+   $('email').focus();
+  }finally{if(btn)btn.disabled=false;}
+  return false;
+ };
  const cfg=()=>({key:DEFAULT_PUBLISHABLE_KEY});
  const org=()=>currentOrganizationId;
  function toast(msg,kind=''){const t=$('toast');t.textContent=msg;t.className='toast';if(kind==='error')t.style.background='#8e3030';else t.style.background='#17283b';setTimeout(()=>t.classList.add('hidden'),4500)}
@@ -358,7 +378,7 @@ function loadDashboardSummary(){
  $('regFacilityCount').addEventListener('change',()=>{$('regOperatingModel').value=Number($('regFacilityCount').value)>1?'multi_facility':'single_facility'});
  $('adminEmail').addEventListener('input',()=>{$('contactEmail').value=$('contactEmail').value||$('adminEmail').value});
  $('registerForm').addEventListener('submit',async e=>{try{supabase=client();await submitInstitutionRegistration(e)}catch(err){e.preventDefault();toast(err.message,'error')}});
- $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginBtn').disabled=true;try{supabase=client();const {error}=await supabase.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;await startApp()}catch(err){toast(err.message||'Falha na autenticação.','error')}finally{$('loginBtn').disabled=false}});
+ 
  $('forgotBtn').addEventListener('click',async()=>{const email=$('email').value.trim();if(!email){toast('Introduza primeiro o seu email.','error');return}try{supabase=client();const {error}=await supabase.auth.resetPasswordForEmail(email);if(error)throw error;toast('Se o email estiver registado, receberá as instruções de recuperação.')}catch(err){toast(err.message,'error')}});
  $('logoutBtn').addEventListener('click',async()=>{if(supabase)await supabase.auth.signOut();currentUser=null;currentOrganizationId=null;setScreen('loginScreen')});
  document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
