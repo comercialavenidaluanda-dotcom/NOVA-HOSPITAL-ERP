@@ -263,10 +263,10 @@
  '<div class="field"><label>Signatário autorizado</label><input id="docSignatoryName" maxlength="180"></div>'+
  '<div class="field"><label>Cargo / função</label><input id="docSignatoryTitle" maxlength="120"></div></div>'+
  '<button class="btn btn-primary" type="submit">Guardar identidade documental</button></form></section>'+
- '<section class="panel"><h2>Faturação e numeração</h2><p class="muted small">Parâmetros para configurar os documentos financeiros da instituição.</p><form id="invoiceSettingsForm"><div class="form-grid">'+
+ '<section class="panel"><h2>Parâmetros financeiros gerais</h2><p class="muted small">Configuração-base. As séries fiscais oficiais são configuradas na secção própria e não usam esta numeração interna.</p><form id="invoiceSettingsForm"><div class="form-grid">'+
  '<div class="field"><label>Moeda fiscal nacional</label><input id="docCurrency" value="AOA — Kwanza angolano" disabled></div>'+
- '<div class="field"><label>Prefixo das faturas</label><input id="invoicePrefix" maxlength="12" value="FT" required></div>'+
- '<div class="field"><label>Próximo número</label><input id="invoiceNextNumber" type="number" min="1" step="1" value="1" required></div>'+
+ '<div class="field"><label>Prefixo padrão interno (não fiscal)</label><input id="invoicePrefix" maxlength="12" value="FT" required></div>'+
+ '<div class="field"><label>Próximo número interno (não fiscal)</label><input id="invoiceNextNumber" type="number" min="1" step="1" value="1" required></div>'+
  '<div class="field"><label>NIF / identificação fiscal</label><input id="taxIdentifier" maxlength="80"></div>'+
  '<div class="field"><label>Regime fiscal</label><input id="taxRegime" maxlength="120"></div>'+
  '<div class="field"><label>Taxa fiscal (%)</label><input id="taxRate" type="number" min="0" max="100" step="0.0001"></div>'+
@@ -300,7 +300,7 @@
 '<div class="field"><label>Estado</label><select id="fiscalSeriesActive"><option value="true">Activa</option><option value="false">Inactiva</option></select></div></div>'+
 '<label><input type="checkbox" id="fiscalSeriesCommunicated"> Série efectivamente comunicada à AGT</label><div class="toolbar"><button class="btn btn-primary" type="submit">Guardar série fiscal</button><span id="fiscalSeriesFeedback" class="small muted"></span></div></form></section>'+
 '<section class="panel"><h2>Preparação dos módulos futuros</h2><div class="form-grid"><div><b>Aprovisionamento</b><p class="small muted">Requisições, ordens de compra, recepção, guias e fornecedores.</p></div><div><b>Contabilidade</b><p class="small muted">Plano de contas, lançamentos, impostos e SAF-T.</p></div><div><b>Faturação</b><p class="small muted">Facturas, recibos, notas de crédito/débito e pagamentos.</p></div></div><div class="notice">Os módulos utilizarão o mesmo cadastro, séries, arquivo e auditoria. A configuração não significa que estejam operacionais.</div></section>'+
-'<section class="panel"><h2>Modelos de documentos</h2><p class="muted small">Configure modelos por tipo, numeração, formato e elementos visuais.</p><div id="documentTemplatesList" class="empty">A carregar modelos...</div><div class="divider"></div><h3 id="documentTemplateFormTitle">Adicionar / actualizar modelo</h3>'+
+'<section class="panel"><h2>Modelos de documentos</h2><p class="muted small">Configure modelos visuais e administrativos. Os documentos fiscais utilizam as séries AGT configuradas acima.</p><div id="documentTemplatesList" class="empty">A carregar modelos...</div><div class="divider"></div><h3 id="documentTemplateFormTitle">Adicionar / actualizar modelo</h3>'+
  '<form id="documentTemplateForm"><div class="form-grid">'+
  '<div class="field"><label>Código único</label><input id="templateCode" maxlength="40" placeholder="GUIA_TRANSFERENCIA" required></div>'+
  '<div class="field"><label>Nome do documento</label><input id="templateName" maxlength="140" required></div>'+
