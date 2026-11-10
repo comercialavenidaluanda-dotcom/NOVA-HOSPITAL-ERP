@@ -274,14 +274,14 @@
  '<div class="field"><label>Aplicar imposto</label><select id="invoiceTaxEnabled"><option value="false">Não — desactivado</option><option value="true">Sim — após validação fiscal</option></select></div></div>'+
  '<div class="notice warn">Não são predefinidos taxas nem regime fiscal. Confirme os requisitos legais aplicáveis antes de activar a tributação ou emitir documentos fiscais.</div>'+
  '<button class="btn btn-primary" type="submit">Guardar definições de faturação</button><span id="invoiceSettingsFeedback" class="small muted"></span></form></section>'+
- '<section class="panel"><h2>Enquadramento fiscal e AGT</h2><p class="muted small">Dados declarados pela instituição. O estado de validação só é oficial mediante comprovativo da AGT.</p><form id="fiscalProfileForm"><div class="form-grid">'+
+ '<section class="panel"><h2>Enquadramento fiscal e AGT</h2><p class="muted small">Dados declarados pela instituição. Este campo é uma declaração administrativa. O estado só é oficial mediante comprovativo verificável da AGT.</p><form id="fiscalProfileForm"><div class="form-grid">'+
 '<div class="field"><label>Denominação social</label><input id="docLegalName" maxlength="220"></div>'+
 '<div class="field"><label>Regime de IVA</label><select id="taxRegimeCode"><option value="">Por definir</option><option value="general">Regime Geral</option><option value="simplified">Regime Simplificado</option><option value="exclusion">Regime de Exclusão</option><option value="not_applicable">Não aplicável</option><option value="pending">Em confirmação</option></select></div>'+
 '<div class="field"><label>Situação de cadastro IVA</label><select id="vatRegistrationStatus"><option value="">Por definir</option><option value="registered">Registado</option><option value="not_registered">Não registado</option><option value="exempt">Isento / especial</option><option value="pending">Pendente</option></select></div>'+
 '<div class="field"><label>Código de contribuinte AGT</label><input id="agtTaxpayerCode" maxlength="100"></div>'+
 '<div class="field"><label>Software de facturação</label><input id="fiscalSoftwareName" maxlength="180"></div>'+
 '<div class="field"><label>Versão do software</label><input id="fiscalSoftwareVersion" maxlength="80"></div>'+
-'<div class="field"><label>Estado de validação AGT</label><select id="agtValidationStatus"><option value="not_submitted">Não submetido</option><option value="pending">Em análise</option><option value="validated">Validado (com comprovativo)</option><option value="rejected">Rejeitado</option><option value="expired">Expirado / suspenso</option></select></div>'+
+'<div class="field"><label>Estado declarado da validação AGT</label><select id="agtValidationStatus"><option value="not_submitted">Não submetido</option><option value="pending">Em análise</option><option value="validated">Validado (com comprovativo)</option><option value="rejected">Rejeitado</option><option value="expired">Expirado / suspenso</option></select></div>'+
 '<div class="field"><label>Referência oficial AGT</label><input id="agtValidationReference" maxlength="180"></div>'+
 '<div class="field"><label>Data de validação</label><input id="agtValidationDate" type="date"></div>'+
 '<div class="field"><label>Retenção documental (anos)</label><input id="documentRetentionYears" type="number" min="1" max="100"></div>'+
