@@ -130,6 +130,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
  </nav><div class="nav-label">OPERAÇÕES CLÍNICAS</div><nav class="nav">
  <button data-page="patients"><span class="ico">♙</span>Pacientes</button>
  <button data-page="reception"><span class="ico">☷</span>Recepção</button>
+  <button data-page="documents"><span class="ico">▤</span>Documentos hospitalares</button>
  <button data-page="psychology"><span class="ico">♡</span>Psicologia</button>
  <button data-page="clinical"><span class="ico">✚</span>Processo clínico</button>
  </nav><div class="nav-label">HOSPITAL</div><nav class="nav">
@@ -146,7 +147,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
 (() => {
  const PROJECT_URL='https://kpeoczaqxucumgunfweq.supabase.co';
  const DEFAULT_PUBLISHABLE_KEY='sb_publishable_9R24dJWZvB5fIJI-zUbDcA_dUAxjDSV';
- let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in', receptionDocumentTemplates=[], documentTemplatesCache=[], documentRows=[], documentAuditRows=[];
+ let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in', receptionDocumentTemplates=[], documentTemplatesCache=[], documentRows=[], documentAuditRows=[], documentCenterTemplates=[], documentCenterPatient=null, documentCenterRows=[];
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  window.novaLoginSubmit=async function(e){
@@ -531,6 +532,76 @@ async function loadReceptionDocuments(){
   w.document.write('<!doctype html><html lang="pt"><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font:14px Arial,sans-serif;color:#17283b;margin:32px}header{border-bottom:2px solid #17334f;padding-bottom:14px;margin-bottom:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #ddd;vertical-align:top}td:first-child{width:190px;font-weight:bold;color:#526579}.foot{margin-top:40px;border-top:1px solid #ddd;padding-top:20px;color:#64748b}@media print{button{display:none}}</style><header>'+(logoUrl?'<img src="'+esc(logoUrl)+'" style="max-width:170px;max-height:85px;object-fit:contain;margin-bottom:10px">':'')+'<h1>'+esc(inst.header_title||inst.legal_name||'NOVA HOSPITAL ERP')+'</h1><div>'+esc(inst.address_text||'')+'</div><div>'+esc(inst.contact_phone||'')+' · '+esc(inst.contact_email||'')+'</div></header><h2>'+esc(title)+'</h2><table>'+rows.filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='').map(x=>'<tr><td>'+esc(x[0])+'</td><td>'+esc(x[1])+'</td></tr>').join('')+'</table><div class="foot">'+esc(inst.footer_text||'Documento gerado pelo NOVA HOSPITAL ERP')+'</div></html>');w.document.close();w.focus();w.print();
  }
 
+
+ function renderDocumentCenter(){
+  return pageHead('Centro documental hospitalar','Modelos por departamento, emissão controlada, pré-visualização, arquivo e impressão em PDF.')+
+  '<section class="panel"><div class="panel-head"><div><h2>Emitir documento ou formulário</h2><p class="muted small">A lista apresenta apenas modelos autorizados para o seu perfil. Documentos clínicos exigem vínculo profissional activo.</p></div><span class="status">Catálogo institucional</span></div><div class="form-grid"><div class="field"><label>DEPARTAMENTO / CATEGORIA</label><select id="docCenterCategory"><option value="">Todos os disponíveis</option></select></div><div class="field"><label>MODELO DOCUMENTAL</label><select id="docCenterTemplate"><option value="">A carregar modelos autorizados…</option></select></div></div><div id="docCenterTemplateInfo" class="notice">Seleccione um modelo para preencher os campos próprios.</div><form id="docCenterIssueForm" class="hidden"><div class="form-grid"><div class="field"><label>PACIENTE (quando aplicável)</label><div class="toolbar"><input id="docCenterPatientSearch" placeholder="Nome ou número do paciente"><button class="btn btn-outline" type="button" id="docCenterSearchPatient">Pesquisar</button></div><div id="docCenterPatientResults"></div><div id="docCenterPatientSelected" class="notice hidden"></div><input id="docCenterPatientId" type="hidden"></div><div class="field"><label>TÍTULO / ASSUNTO</label><input id="docCenterTitle" maxlength="180" required></div><div class="field wide"><label>OBSERVAÇÕES GERAIS</label><textarea id="docCenterNotes" rows="2"></textarea></div></div><div id="docCenterDynamicFields" class="form-grid"></div><div class="toolbar"><button class="btn btn-outline" type="button" id="docCenterPreview">Pré-visualizar</button><button class="btn btn-primary" type="submit" id="docCenterIssue">Emitir e arquivar</button><span id="docCenterFeedback" class="small muted"></span></div></form></section>'+
+  '<section class="panel"><div class="panel-head"><div><h2>Arquivo documental autorizado</h2><p class="muted small">Documentos emitidos pelo utilizador e documentos abrangidos pelas suas permissões.</p></div><button class="btn btn-outline small" id="docCenterRefresh" type="button">Actualizar arquivo</button></div><div id="docCenterArchive"><div class="empty">A carregar arquivo…</div></div></section>'+
+  '<section class="panel"><h2>Departamentos abrangidos pelo catálogo</h2><div class="form-grid"><div><b>Recepção e admissão</b><p class="small muted">Cadastros, comprovativos, declarações administrativas e encaminhamentos.</p></div><div><b>Clínica, urgência e enfermagem</b><p class="small muted">Consultas, triagem, observação, prescrições, evolução e cuidados.</p></div><div><b>Internamento e cirurgia</b><p class="small muted">Admissão, transferências, consentimentos, cirurgia e alta.</p></div><div><b>Diagnóstico, laboratório e farmácia</b><p class="small muted">Requisições, amostras, resultados, dispensa e devoluções.</p></div><div><b>Psicologia, maternidade e pediatria</b><p class="small muted">Avaliações, planos, sessões, pré-natal, parto e vacinação.</p></div><div><b>Financeiro, administração e qualidade</b><p class="small muted">Modelos financeiros, gestão, RH, incidentes, reclamações e auditoria.</p></div></div><div class="notice warn">Facturas, facturas-recibo, recibos fiscais e notas de crédito/débito permanecem desactivados até a instituição configurar séries fiscais e permissões financeiras. A emissão visual, por si só, não certifica conformidade AGT.</div></section>';
+ }
+ async function loadDocumentCenter(){
+  const sel=$('docCenterTemplate'),cat=$('docCenterCategory');if(!sel)return;
+  try{
+   const rows=await publicCall('api_get_available_document_templates',{p_organization_id:org()});documentCenterTemplates=Array.isArray(rows)?rows:[];
+   const categories=[...new Set(documentCenterTemplates.map(t=>t.template_config?.module_key||t.category))];
+   cat.innerHTML='<option value="">Todos os disponíveis</option>'+categories.map(x=>'<option value="'+esc(x)+'">'+esc(({reception:'Recepção',clinical:'Processo clínico',nursing:'Enfermagem',inpatient:'Internamento',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',surgery:'Bloco operatório',maternity:'Maternidade',psychology:'Psicologia',finance:'Financeiro',administration:'Administração',quality:'Qualidade'})[x]||x)+'</option>').join('');
+   renderDocumentCenterTemplateOptions();await loadDocumentCenterArchive();
+  }catch(err){sel.innerHTML='<option value="">Sem acesso ao catálogo</option>';toast(err.message||'Falha ao carregar catálogo documental','error')}
+ }
+ function renderDocumentCenterTemplateOptions(){
+  const sel=$('docCenterTemplate'),cat=$('docCenterCategory');if(!sel)return;const previous=sel.value,filter=cat?.value||'';
+  const rows=documentCenterTemplates.filter(t=>!filter||(t.template_config?.module_key||t.category)===filter);
+  sel.innerHTML='<option value="">Seleccione um modelo</option>'+rows.map(t=>'<option value="'+esc(t.document_code)+'">'+esc(t.display_name)+' · '+esc(t.document_code)+'</option>').join('');
+  if(rows.some(t=>t.document_code===previous))sel.value=previous;
+  renderDocumentCenterFields();
+ }
+ function renderDocumentCenterFields(){
+  const code=$('docCenterTemplate')?.value,t=documentCenterTemplates.find(x=>x.document_code===code),form=$('docCenterIssueForm'),host=$('docCenterDynamicFields'),info=$('docCenterTemplateInfo');if(!form||!host)return;
+  if(!t){form.classList.add('hidden');info.textContent='Seleccione um modelo para preencher os campos próprios.';host.innerHTML='';return;}
+  const cfg=t.template_config||{};form.classList.remove('hidden');info.textContent=(cfg.module_key||t.category)+' · '+(cfg.requires_professional?'Exige profissional activo':'Emissão administrativa autorizada')+' · '+(cfg.requires_signature?'Prevê assinatura / validação':'Sem assinatura profissional obrigatória');
+  if(cfg.patient_required){$('docCenterPatientId').required=true;}else $('docCenterPatientId').required=false;
+  host.innerHTML=(cfg.fields||[]).map(f=>{const id='docField_'+f.key,required=f.required?'required':'';let control='';
+   if(f.type==='textarea')control='<textarea id="'+esc(id)+'" data-doc-field="'+esc(f.key)+'" rows="3" '+required+'></textarea>';
+   else if(f.type==='select')control='<select id="'+esc(id)+'" data-doc-field="'+esc(f.key)+'" '+required+'><option value="">Seleccione</option>'+(f.options||[]).map(o=>'<option>'+esc(o)+'</option>').join('')+'</select>';
+   else control='<input id="'+esc(id)+'" data-doc-field="'+esc(f.key)+'" type="'+(f.type==='date'?'date':'text')+'" '+required+'>';
+   return '<div class="field wide"><label>'+esc(f.label)+(f.required?' *':'')+'</label>'+control+'</div>';
+  }).join('');
+  $('docCenterTitle').value=t.display_name;
+ }
+ async function searchDocumentCenterPatient(){
+  const q=$('docCenterPatientSearch').value.trim(),host=$('docCenterPatientResults');if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return}
+  host.innerHTML='<div class="empty">A pesquisar…</div>';
+  try{const rows=await call('public','api_search_patient_directory',{p_organization_id:org(),p_query:q,p_limit:20,p_offset:0});
+   host.innerHTML=rows?.length?'<div class="table-wrap"><table><thead><tr><th>Número</th><th>Paciente</th><th></th></tr></thead><tbody>'+rows.map(p=>'<tr><td>'+esc(p.patient_number||p.medical_id||'—')+'</td><td>'+esc(p.preferred_name||p.full_name)+'</td><td><button class="btn btn-outline small" type="button" data-doc-center-patient="'+esc(p.patient_id)+'" data-name="'+esc(p.preferred_name||p.full_name)+'" data-number="'+esc(p.patient_number||'')+'">Seleccionar</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhum paciente encontrado.</div>';
+   host.querySelectorAll('[data-doc-center-patient]').forEach(b=>b.addEventListener('click',()=>{documentCenterPatient={id:b.dataset.docCenterPatient,name:b.dataset.name,number:b.dataset.number};$('docCenterPatientId').value=documentCenterPatient.id;$('docCenterPatientSelected').textContent='Paciente: '+documentCenterPatient.name+' · '+documentCenterPatient.number;$('docCenterPatientSelected').classList.remove('hidden');}));
+  }catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Falha na pesquisa.')+'</div>'}
+ }
+ function documentCenterPayload(){
+  const code=$('docCenterTemplate').value,t=documentCenterTemplates.find(x=>x.document_code===code);if(!t)throw new Error('Seleccione um modelo.');
+  const cfg=t.template_config||{};if(cfg.patient_required&&!documentCenterPatient)throw new Error('Este documento exige associar um paciente.');
+  const fields={};document.querySelectorAll('#docCenterDynamicFields [data-doc-field]').forEach(el=>{fields[el.dataset.docField]=el.value.trim()});
+  const missing=(cfg.fields||[]).find(f=>f.required&&!fields[f.key]);if(missing)throw new Error('Preencha o campo: '+missing.label);
+  const content={document_title:$('docCenterTitle').value.trim()||t.display_name,notes:$('docCenterNotes').value.trim()||null,patient_name:documentCenterPatient?.name||null,patient_number:documentCenterPatient?.number||null,origin_module:cfg.module_key||t.category,form_fields:fields,...fields};
+  if(cfg.requires_professional)content.professional_validation_required=true;
+  return {t,content};
+ }
+ async function previewDocumentCenter(){
+  try{const {t,content}=documentCenterPayload(),now=new Date().toISOString();await printIssuedDocument({document_code:t.document_code,document_number:'RASCUNHO — NÃO EMITIDO',issued_at:now,content_snapshot:{document_name:t.display_name,issued_at:now,template_config:t.template_config||{},paper_size:t.paper_size||'A4',orientation:t.orientation||'portrait',institution:{header_title:'Pré-visualização',footer_text:'RASCUNHO — NÃO EMITIDO'},content}})}catch(err){toast(err.message||'Não foi possível pré-visualizar.','error')}
+ }
+ async function submitDocumentCenter(e){
+  e.preventDefault();const btn=$('docCenterIssue');btn.disabled=true;
+  try{const {t,content}=documentCenterPayload();const result=await publicCall('api_issue_document',{p_organization_id:org(),p_document_code:t.document_code,p_patient_id:documentCenterPatient?.id||null,p_related_resource_type:t.template_config?.module_key||t.category,p_related_resource_id:null,p_content:content});
+   $('docCenterFeedback').textContent='Emitido: '+result.document_number;toast('Documento emitido e arquivado.');await printIssuedDocument(result);$('docCenterIssueForm').reset();documentCenterPatient=null;$('docCenterPatientId').value='';$('docCenterPatientSelected').classList.add('hidden');renderDocumentCenterFields();await loadDocumentCenterArchive();
+  }catch(err){$('docCenterFeedback').textContent=err.message||'Falha na emissão.';toast(err.message||'Falha na emissão documental.','error')}finally{btn.disabled=false}
+ }
+ async function loadDocumentCenterArchive(){
+  const host=$('docCenterArchive');if(!host)return;host.innerHTML='<div class="empty">A consultar arquivo…</div>';
+  try{const from=new Date(Date.now()-90*86400000).toISOString(),to=new Date(Date.now()+86400000).toISOString();documentCenterRows=await publicCall('api_list_accessible_issued_documents',{p_organization_id:org(),p_from:from,p_to:to,p_limit:300});
+   host.innerHTML=documentCenterRows.length?'<div class="table-wrap"><table><thead><tr><th>Emissão</th><th>Documento</th><th>Número</th><th>Estado</th><th></th></tr></thead><tbody>'+documentCenterRows.map(d=>'<tr><td>'+esc(new Date(d.issued_at).toLocaleString('pt-AO'))+'</td><td>'+esc(d.document_code)+'</td><td><b>'+esc(d.document_number)+'</b></td><td>'+esc(d.document_status)+'</td><td><button class="btn btn-outline small" type="button" data-doc-center-print="'+esc(d.id)+'">Abrir / PDF</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Não existem documentos acessíveis neste período.</div>';
+   host.querySelectorAll('[data-doc-center-print]').forEach(b=>b.addEventListener('click',()=>{const d=documentCenterRows.find(x=>x.id===b.dataset.docCenterPrint);if(d)printIssuedDocument(d)}));
+  }catch(err){host.innerHTML='<div class="notice warn">'+esc(err.message||'Não foi possível consultar o arquivo.')+'</div>'}
+ }
+
  function renderModules(){
   const labels={
    nursing:['✚','Enfermagem','Cuidados de enfermagem, sinais vitais, administração e planos de cuidados.','Módulo de enfermagem em integração com profissionais e registos autorizados.'],
@@ -582,11 +653,17 @@ async function loadReceptionDocuments(){
   return pageHead(item[0],'Módulo hospitalar · NOVA HOSPITAL ERP')+
    '<section class="panel"><h2>Área de trabalho</h2><p>'+esc(item[1])+'</p><div class="notice warn">A estrutura e o acesso ao módulo estão disponíveis. Os formulários clínicos, fluxos de trabalho e gravação operacional desta área serão ligados progressivamente aos serviços e permissões do departamento. Não são apresentados registos fictícios.</div><div class="toolbar"><button class="btn btn-primary" data-go="reception">Abrir recepção</button><button class="btn btn-outline" data-go="modules">Voltar a todos os módulos</button><button class="btn btn-outline" data-go="staff">Profissionais e equipa</button></div></section>';
  }
- const renderers={overview:renderOverview,patients:renderPatients,reception:renderReception,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,definitions:renderDefinitions,modules:renderModules,moduleWorkspace:renderModuleWorkspace};
- const titles={overview:'Painel geral',patients:'Pacientes',reception:'Recepção',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',definitions:'Definições técnicas',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
- function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='definitions'){loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
+ const renderers={overview:renderOverview,patients:renderPatients,reception:renderReception,documents:renderDocumentCenter,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,definitions:renderDefinitions,modules:renderModules,moduleWorkspace:renderModuleWorkspace};
+ const titles={overview:'Painel geral',patients:'Pacientes',reception:'Recepção',documents:'Documentos hospitalares',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',definitions:'Definições técnicas',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
+ function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='documents')loadDocumentCenter().catch(err=>toast(err.message||'Falha ao abrir centro documental','error'));if(page==='definitions'){loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
  function bindPage(){
-  if($('documentSettingsForm'))$('documentSettingsForm').addEventListener('submit',saveDocumentSettingsForm);
+  if($('docCenterTemplate'))$('docCenterTemplate').addEventListener('change',renderDocumentCenterFields);
+   if($('docCenterCategory'))$('docCenterCategory').addEventListener('change',renderDocumentCenterTemplateOptions);
+   if($('docCenterSearchPatient'))$('docCenterSearchPatient').addEventListener('click',searchDocumentCenterPatient);
+   if($('docCenterPreview'))$('docCenterPreview').addEventListener('click',previewDocumentCenter);
+   if($('docCenterIssueForm'))$('docCenterIssueForm').addEventListener('submit',submitDocumentCenter);
+   if($('docCenterRefresh'))$('docCenterRefresh').addEventListener('click',loadDocumentCenterArchive);
+   if($('documentSettingsForm'))$('documentSettingsForm').addEventListener('submit',saveDocumentSettingsForm);
   if($('institutionSettingsForm'))$('institutionSettingsForm').addEventListener('submit',saveInstitutionSettings);
   if($('organizationPreferencesForm'))$('organizationPreferencesForm').addEventListener('submit',saveOrganizationPreferences);
   if($('docLogoFile'))$('docLogoFile').addEventListener('change',e=>previewOrganizationLogo(e).catch(err=>toast(err.message||'Falha na pré-visualização do logótipo','error')));
