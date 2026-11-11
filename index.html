@@ -587,7 +587,8 @@ async function loadDashboardSummary(){
   $('receptionFacility').addEventListener('change',()=>{renderReceptionDepartmentOptions();loadReceptionData()});
   $('receptionDepartment').addEventListener('change',loadReceptionData);
   $('receptionDate').addEventListener('change',()=>{loadReceptionData();loadReceptionSchedule()});
-  $('refreshReception').addEventListener('click',loadReceptionData);\n  $('refreshReceptionSchedule')?.addEventListener('click',loadReceptionSchedule);$('receptionClinic')?.addEventListener('change',loadReceptionSchedule);
+  $('refreshReception').addEventListener('click',loadReceptionData);
+  $('refreshReceptionSchedule')?.addEventListener('click',loadReceptionSchedule);$('receptionClinic')?.addEventListener('change',loadReceptionSchedule);
   loadReceptionDepartments().catch(showReceptionError);loadReceptionClinics().catch(err=>{const host=$('receptionScheduleList');if(host)host.innerHTML='<div class="notice warn">Agenda indisponível: '+esc(err.message||'sem clínicas configuradas')+'</div>'});
  }
  async function loadReceptionDepartments(){
