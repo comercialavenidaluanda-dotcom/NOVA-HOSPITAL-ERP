@@ -211,6 +211,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
  <button data-page="clinical"><span class="ico">✚</span>Processo clínico</button>
  </nav><div class="nav-label">HOSPITAL</div><nav class="nav">
  <button data-page="inpatient"><span class="ico">▤</span>Internamento e camas</button>
+ <button data-page="emergency"><span class="ico">✚</span>Urgência e Emergência</button>
  <button data-page="staff"><span class="ico">♧</span>Profissionais</button>
  <button data-page="modules"><span class="ico">▦</span>Todos os módulos</button>
  </nav><div class="nav-label">GESTÃO E ADMINISTRAÇÃO</div><nav class="nav"><button data-page="accounting"><span class="ico">▧</span>Contabilidade</button><button data-page="definitions"><span class="ico">⚙</span>Definições técnicas</button></nav><div id="configuredAreasNav"></div><div class="sidebar-bottom">Ambiente institucional<br><span id="connectionState">Sessão protegida</span></div></aside>
@@ -1017,6 +1018,56 @@ async function loadReceptionDocuments(){
   catch(err){toast(err.message||'Não foi possível emitir a factura.','error')}
  }
 
+
+ function renderEmergencyWorkspace(){return pageHead('Urgência e Emergência','Gestão da chegada, triagem, prioridade clínica e fila assistencial do banco de urgência.')+
+ '<div class="notice warn"><b>Prioridade clínica:</b> situações com risco imediato devem ser encaminhadas directamente à equipa de reanimação. O ERP apoia o registo e a coordenação; não substitui a decisão clínica nem os protocolos do hospital.</div>'+
+ '<section class="panel"><div class="panel-head"><div><h2>Unidade de urgência</h2><p class="muted small">A fila apresenta apenas entradas registadas no serviço de urgência seleccionado.</p></div><button class="btn btn-primary" type="button" id="emergencyNewArrival">Registar chegada urgente</button></div><div class="form-grid"><div class="field"><label>UNIDADE HOSPITALAR</label><select id="emergencyFacility"></select></div><div class="field"><label>SERVIÇO DE URGÊNCIA</label><select id="emergencyDepartment"></select></div><div class="field"><label>DATA</label><input id="emergencyDate" type="date"></div></div><div class="toolbar"><button class="btn btn-primary" type="button" id="emergencyRefresh">Actualizar fila</button><span id="emergencyStatus" class="small muted">A carregar serviços de urgência…</span></div></section>'+
+ '<div class="grid" id="emergencyStats">'+stat('Entradas','—','No serviço seleccionado')+stat('Triagem pendente','—','A aguardar avaliação')+stat('Prioridade imediata','—','Vermelho / laranja')+stat('Em atendimento','—','Em avaliação clínica')+'</div>'+
+ '<section class="panel"><div class="panel-head"><div><h2>Fila de urgência</h2><p class="muted small">Os pacientes são apresentados por chegada. A classificação de risco deve ser registada por profissional autorizado.</p></div><span class="status" id="emergencyCount">0 entradas</span></div><div id="emergencyQueue"><div class="empty">A seleccionar unidade…</div></div></section>'+
+ '<section class="panel hidden" id="receptionTriagePanel"><div class="panel-head"><div><h2>Avaliação clínica de triagem</h2><p class="muted small">Registe a prioridade, queixa principal e sinais vitais. A classificação deve seguir o protocolo clínico adoptado pela instituição.</p></div><span class="status">Registo clínico</span></div><form id="receptionTriageForm"><input type="hidden" id="receptionTriageVisitId"><div class="form-grid"><div class="field"><label>CLASSIFICAÇÃO DE RISCO</label><select id="receptionTriageLevel" required><option value="">Seleccione a classificação</option><option value="red">Vermelho — imediato</option><option value="orange">Laranja — muito urgente</option><option value="yellow">Amarelo — urgente</option><option value="green">Verde — pouco urgente</option><option value="blue">Azul — não urgente</option></select></div><div class="field wide"><label>QUEIXA PRINCIPAL *</label><input id="receptionTriageComplaint" required maxlength="1000"></div><div class="field"><label>PRESSÃO ARTERIAL</label><input id="triageBP" placeholder="120/80"></div><div class="field"><label>FREQUÊNCIA CARDÍACA</label><input id="triageHR" type="number" min="0" max="300"></div><div class="field"><label>TEMPERATURA °C</label><input id="triageTemp" type="number" step="0.1" min="25" max="45"></div><div class="field"><label>FREQUÊNCIA RESPIRATÓRIA</label><input id="triageRR" type="number" min="0" max="100"></div><div class="field"><label>SATURAÇÃO O₂ %</label><input id="triageSpo2" type="number" min="0" max="100"></div><div class="field"><label>PESO kg</label><input id="triageWeight" type="number" step="0.1" min="0"></div><div class="field wide"><label>OBSERVAÇÃO CLÍNICA</label><textarea id="receptionTriageObservation" rows="3" maxlength="3000"></textarea></div></div><div class="toolbar"><button class="btn btn-primary" type="submit">Guardar avaliação de triagem</button><button class="btn btn-outline" type="button" id="emergencyCancelTriage">Cancelar</button></div></form></section>'+
+ '<section class="panel"><h2>Fluxo de admissão</h2><p class="muted small">A recepção regista a chegada e cria o episódio de urgência. Após triagem e avaliação médica, o paciente pode ser encaminhado para internamento, bloco operatório, outro serviço ou alta, conforme decisão clínica.</p><div class="toolbar"><button class="btn btn-outline" type="button" id="emergencyGoReception">Abrir recepção</button><button class="btn btn-outline" type="button" id="emergencyGoInpatient">Abrir internamento</button><button class="btn btn-outline" type="button" id="emergencyGoClinical">Abrir processo clínico</button></div></section>';
+ }
+ let emergencyDepartments=[];
+ async function loadEmergencyWorkspace(){
+  const status=$('emergencyStatus'),facilitySelect=$('emergencyFacility');if(!facilitySelect)return;
+  status.textContent='A consultar unidades e serviços de urgência…';
+  try{
+   const rows=await publicCall('api_get_reception_departments',{p_organization_id:org()});emergencyDepartments=(Array.isArray(rows)?rows:[]).filter(x=>x.department_type==='emergency');
+   const facilities=[...new Map(emergencyDepartments.map(x=>[x.facility_id,{id:x.facility_id,name:x.facility_name,code:x.facility_code}])).values()];
+   if(!facilities.length){facilitySelect.innerHTML='<option value="">Sem serviço de urgência activo</option>';$('emergencyDepartment').innerHTML='';$('emergencyQueue').innerHTML='<div class="empty">Não foi encontrado um departamento activo do tipo Urgência nesta instituição. Configure-o em Definições e confirme a unidade hospitalar.</div>';status.textContent='Sem serviço de urgência configurado.';return}
+   facilitySelect.innerHTML=facilities.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+' · '+esc(x.code||'')+'</option>').join('');
+   const date=$('emergencyDate');if(!date.value)date.value=receptionLocalDate();
+   renderEmergencyDepartmentOptions();await loadEmergencyQueue();status.textContent='Serviços de urgência carregados.';
+  }catch(err){status.textContent=err.message||'Falha ao carregar urgência.';$('emergencyQueue').innerHTML='<div class="notice error">'+esc(err.message||'Falha ao carregar a fila.')+'</div>';throw err}
+ }
+ function renderEmergencyDepartmentOptions(){
+  const facilityId=$('emergencyFacility').value,rows=emergencyDepartments.filter(x=>x.facility_id===facilityId),select=$('emergencyDepartment'),previous=select.value;
+  select.innerHTML=rows.map(x=>'<option value="'+esc(x.department_id)+'">'+esc(x.department_name)+' · '+esc(x.department_code||'')+'</option>').join('');
+  if(previous&&rows.some(x=>x.department_id===previous))select.value=previous;
+ }
+ async function loadEmergencyQueue(){
+  const facilityId=$('emergencyFacility')?.value,departmentId=$('emergencyDepartment')?.value,date=$('emergencyDate')?.value,host=$('emergencyQueue');if(!facilityId||!departmentId||!date||!host)return;
+  host.innerHTML='<div class="empty">A consultar fila de urgência…</div>';
+  try{
+   const range=receptionDateRange(date),rows=await publicCall('api_get_reception_queue',{p_organization_id:org(),p_facility_id:facilityId,p_department_id:departmentId,p_from:range.from,p_to:range.to});
+   renderEmergencyQueue(Array.isArray(rows)?rows:[]);
+   $('emergencyStatus').textContent='Fila actualizada às '+new Date().toLocaleTimeString('pt-AO',{timeZone:'Africa/Luanda',hour:'2-digit',minute:'2-digit'})+'.';
+  }catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Falha ao consultar fila de urgência.')+'</div>';throw err}
+ }
+ function renderEmergencyQueue(rows){
+  const host=$('emergencyQueue'),stats=$('emergencyStats');const pending=rows.filter(x=>x.triage_status==='pending').length,active=rows.filter(x=>x.queue_status==='with_professional').length;
+  stats.innerHTML=stat('Entradas',String(rows.length),'No serviço seleccionado')+stat('Triagem pendente',String(pending),'A aguardar avaliação')+stat('Prioridade imediata','—','Consultar classificação clínica')+stat('Em atendimento',String(active),'Em avaliação clínica');
+  $('emergencyCount').textContent=rows.length+' entrada(s)';
+  if(!rows.length){host.innerHTML='<div class="empty">Não existem entradas de urgência nesta unidade e data. Para registar uma chegada, utilize a recepção.</div>';return}
+  host.innerHTML='<div class="table-wrap"><table><thead><tr><th>Chegada</th><th>Paciente</th><th>Queixa / motivo</th><th>Triagem</th><th>Estado</th><th>Acção</th></tr></thead><tbody>'+rows.map(r=>{
+   const triage=r.triage_status==='pending'?'Pendente':r.triage_status==='assessed'?'Avaliada':'Não aplicável';
+   const next=r.queue_status==='waiting'&&r.triage_status==='assessed'?['ready','Encaminhar']:r.queue_status==='triaged'?['ready','Preparar atendimento']:r.queue_status==='ready'?['with_professional','Iniciar atendimento']:r.queue_status==='with_professional'?['completed','Concluir atendimento']:null;
+   const action=r.triage_status==='pending'?(r.can_assess_triage?'<button class="btn btn-primary small" data-emergency-triage="'+esc(r.reception_visit_id)+'">Avaliar triagem</button>':'<span class="small muted">A aguardar profissional autorizado</span>'):(next?'<button class="btn btn-outline small" data-emergency-status="'+esc(r.reception_visit_id)+'" data-next="'+next[0]+'">'+next[1]+'</button>':'<span class="small muted">Sem acção pendente</span>');
+   return '<tr><td>'+receptionTime(r.arrived_at)+'</td><td><b>'+esc(r.patient_display_name||'Paciente')+'</b><div class="small muted">'+esc(r.patient_number||'')+'</div></td><td>'+esc(r.visit_reason||'—')+'</td><td><span class="status '+(r.triage_status==='pending'?'warn':'')+'">'+triage+'</span></td><td>'+receptionStatusLabel(r.queue_status)+'</td><td>'+action+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+  host.querySelectorAll('[data-emergency-triage]').forEach(btn=>btn.addEventListener('click',()=>{$('receptionTriageVisitId').value=btn.dataset.emergencyTriage;$('receptionTriagePanel').classList.remove('hidden');$('receptionTriagePanel').scrollIntoView({behavior:'smooth',block:'start'})}));
+  host.querySelectorAll('[data-emergency-status]').forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;try{await call('patient','update_reception_visit_status',{p_reception_visit_id:btn.dataset.emergencyStatus,p_new_status:btn.dataset.next,p_reception_note:'Actualização no módulo de Urgência'});toast('Estado do atendimento actualizado.');await loadEmergencyQueue()}catch(err){toast(err.message||'Falha ao actualizar estado.','error');btn.disabled=false}}));
+ }
  function renderModules(){
   const labels={
    nursing:['✚','Enfermagem','Cuidados de enfermagem, sinais vitais, administração e planos de cuidados.','Módulo de enfermagem em integração com profissionais e registos autorizados.'],
@@ -1049,7 +1100,7 @@ async function loadReceptionDocuments(){
   if(code==='psychology'){navigate('psychology');return}
   if(code==='clinical'){navigate('clinical');return}
   if(code==='outpatient'){navigate('patients');return}
-  if(code==='emergency'){receptionPresetVisitType='emergency';navigate('reception');return}
+  if(code==='emergency'){navigate('emergency');return}
   navigate('moduleWorkspace');
  }
  function renderModuleWorkspace(){
@@ -1068,10 +1119,19 @@ async function loadReceptionDocuments(){
   return pageHead(item[0],'Módulo hospitalar · NOVA HOSPITAL ERP')+
    '<section class="panel"><h2>Área de trabalho</h2><p>'+esc(item[1])+'</p><div class="notice warn">A estrutura e o acesso ao módulo estão disponíveis. Os formulários clínicos, fluxos de trabalho e gravação operacional desta área serão ligados progressivamente aos serviços e permissões do departamento. Não são apresentados registos fictícios.</div><div class="toolbar"><button class="btn btn-primary" data-go="reception">Abrir recepção</button><button class="btn btn-outline" data-go="modules">Voltar a todos os módulos</button><button class="btn btn-outline" data-go="staff">Profissionais e equipa</button></div></section>';
  }
- const renderers={overview:renderOverview,patients:renderPatients,reception:renderReception,documents:renderDocumentCenter,accounting:renderAccounting,finance:renderFinance,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,definitions:renderDefinitions,modules:renderModules,moduleWorkspace:renderModuleWorkspace};
- const titles={overview:'Painel geral',patients:'Pacientes',reception:'Recepção',documents:'Documentos hospitalares',accounting:'Contabilidade',finance:'Financeiro e facturação',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',definitions:'Definições técnicas',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
- function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='documents')loadDocumentCenter().catch(err=>toast(err.message||'Falha ao abrir centro documental','error'));if(page==='finance')loadFinanceWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo financeiro','error'));if(page==='inpatient')loadInpatientWorkspace();if(page==='accounting')loadAccountingWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo de contabilidade','error'));if(page==='definitions'){loadInstitutionalServiceCatalog().catch(err=>{const h=$('institutionalCatalogList');if(h)h.innerHTML='<div class="notice error">Falha ao carregar catálogo: '+esc(err.message||'erro desconhecido')+'</div>';});loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
+ const renderers={overview:renderOverview,patients:renderPatients,reception:renderReception,emergency:renderEmergencyWorkspace,documents:renderDocumentCenter,accounting:renderAccounting,finance:renderFinance,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,definitions:renderDefinitions,modules:renderModules,moduleWorkspace:renderModuleWorkspace};
+ const titles={overview:'Painel geral',patients:'Pacientes',reception:'Recepção',emergency:'Urgência e Emergência',documents:'Documentos hospitalares',accounting:'Contabilidade',finance:'Financeiro e facturação',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',definitions:'Definições técnicas',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
+ function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='documents')loadDocumentCenter().catch(err=>toast(err.message||'Falha ao abrir centro documental','error'));if(page==='finance')loadFinanceWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo financeiro','error'));if(page==='inpatient')loadInpatientWorkspace();if(page==='emergency')loadEmergencyWorkspace().catch(err=>toast(err.message||'Falha ao abrir urgência','error'));if(page==='accounting')loadAccountingWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo de contabilidade','error'));if(page==='definitions'){loadInstitutionalServiceCatalog().catch(err=>{const h=$('institutionalCatalogList');if(h)h.innerHTML='<div class="notice error">Falha ao carregar catálogo: '+esc(err.message||'erro desconhecido')+'</div>';});loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
  function bindPage(){
+  if($('emergencyFacility'))$('emergencyFacility').addEventListener('change',()=>{renderEmergencyDepartmentOptions();loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error'))});
+  if($('emergencyDepartment'))$('emergencyDepartment').addEventListener('change',()=>loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error')));
+  if($('emergencyDate'))$('emergencyDate').addEventListener('change',()=>loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error')));
+  if($('emergencyRefresh'))$('emergencyRefresh').addEventListener('click',()=>loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error')));
+  if($('emergencyNewArrival'))$('emergencyNewArrival').addEventListener('click',()=>{receptionPresetVisitType='emergency';navigate('reception')});
+  if($('emergencyGoReception'))$('emergencyGoReception').addEventListener('click',()=>navigate('reception'));
+  if($('emergencyGoInpatient'))$('emergencyGoInpatient').addEventListener('click',()=>navigate('inpatient'));
+  if($('emergencyGoClinical'))$('emergencyGoClinical').addEventListener('click',()=>navigate('clinical'));
+  if($('emergencyCancelTriage'))$('emergencyCancelTriage').addEventListener('click',()=>{$('receptionTriagePanel').classList.add('hidden');$('receptionTriageForm').reset()});
   if($('clSearch'))$('clSearch').addEventListener('click',searchClPatients);
   if($('clPatientQuery'))$('clPatientQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchClPatients()}});
   if($('clEncounterForm'))$('clEncounterForm').addEventListener('submit',createClEncounter);
@@ -1416,7 +1476,7 @@ async function saveCapacity(e){e.preventDefault();const btn=e.submitter;btn.disa
   try{
    const vitals={blood_pressure:$('triageBP').value.trim()||null,heart_rate:$('triageHR').value?Number($('triageHR').value):null,temperature_c:$('triageTemp').value?Number($('triageTemp').value):null,respiratory_rate:$('triageRR').value?Number($('triageRR').value):null,spo2_percent:$('triageSpo2').value?Number($('triageSpo2').value):null,weight_kg:$('triageWeight').value?Number($('triageWeight').value):null};
    await publicCall('api_assess_reception_triage',{p_reception_visit_id:$('receptionTriageVisitId').value,p_triage_level:$('receptionTriageLevel').value,p_chief_complaint:$('receptionTriageComplaint').value.trim(),p_vital_signs:vitals,p_clinical_observation:$('receptionTriageObservation').value.trim()||null});
-   toast('Triagem registada.');$('receptionTriageForm').reset();$('receptionTriagePanel').classList.add('hidden');await loadReceptionData();
+   toast('Triagem registada.');$('receptionTriageForm').reset();$('receptionTriagePanel').classList.add('hidden');if(currentPage==='emergency')await loadEmergencyQueue();else await loadReceptionData();
   }catch(err){toast(err.message||'Falha ao guardar triagem.','error')}
   finally{if(btn)btn.disabled=false}
  }
