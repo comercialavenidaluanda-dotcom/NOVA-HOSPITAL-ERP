@@ -554,7 +554,33 @@ async function loadReceptionDocuments(){
   const fieldDefs=snap.template_config?.fields||[],formFields=content.form_fields||{};const fieldRows=Object.entries(formFields).map(([key,value])=>[fieldDefs.find(x=>x.key===key)?.label||key,String(value??'')]);const professional=content.responsible_professional||{};const invoiceRows=(content.items||[]).flatMap((item,n)=>[['Artigo / serviço '+(n+1),item.description],['Quantidade',item.quantity],['Preço unitário',moneyAOA(item.unit_price)],['Desconto',moneyAOA(item.discount)],['IVA',String(item.tax_rate)+'% · '+moneyAOA(item.tax)],['Total da linha',moneyAOA(item.total)]]);
   const rows=[['Número',d.document_number],['Data de emissão',d.issued_at||snap.issued_at],['Instituição',inst.legal_name||inst.header_title||''],['NIF da instituição',inst.tax_identifier||''],['Adquirente',content.customer_name||''],['NIF do adquirente',content.customer_nif||''],['Paciente',content.patient_name||content.patient?.patient_name||d.patient_id||''],['Número do paciente',content.patient_number||content.patient?.patient_number||''],['Profissional responsável',professional.professional_name||content.professional_name||''],['Código profissional',professional.professional_code||''],['Cédula / licença',professional.license_number||''],['Origem',content.from_department||''],['Destino',content.to_department||''],['Motivo',content.transfer_reason||''],['Descrição',content.description||''],...invoiceRows,['Subtotal',content.subtotal!==undefined?moneyAOA(content.subtotal):''],['Impostos',content.tax_total!==undefined?moneyAOA(content.tax_total):''],['TOTAL A PAGAR',content.total_amount!==undefined?moneyAOA(content.total_amount):''],...fieldRows,['Observações',content.notes||'']];
   const w=window.open('','_blank');if(!w){toast('Permita janelas de impressão para abrir o documento.','error');return}
-  w.document.write('<!doctype html><html lang="pt"><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font:14px Arial,sans-serif;color:#17283b;margin:32px}header{border-bottom:2px solid #17334f;padding-bottom:14px;margin-bottom:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #ddd;vertical-align:top}td:first-child{width:190px;font-weight:bold;color:#526579}.foot{margin-top:40px;border-top:1px solid #ddd;padding-top:20px;color:#64748b}@media print{button{display:none}}</style><header>'+(logoUrl?'<img src="'+esc(logoUrl)+'" style="max-width:170px;max-height:85px;object-fit:contain;margin-bottom:10px">':'')+'<h1>'+esc(inst.header_title||inst.legal_name||'NOVA HOSPITAL ERP')+'</h1><div>'+esc(inst.address_text||'')+'</div><div>'+esc(inst.contact_phone||'')+' · '+esc(inst.contact_email||'')+'</div></header><h2>'+esc(title)+'</h2><table>'+rows.filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='').map(x=>'<tr><td>'+esc(x[0])+'</td><td>'+esc(x[1])+'</td></tr>').join('')+'</table><div class="foot">'+esc(inst.footer_text||'Documento gerado pelo NOVA HOSPITAL ERP')+'</div></html>');w.document.close();w.focus();w.print();
+  w.document.write('<!doctype html><html lang="pt"><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font:14px Arial,sans-serif;color:#17283b;margin:32px}header{border-bottom:2px solid #17334f;padding-bottom:14px;margin-bottom:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #ddd;vertical-align:top}td:first-child{width:190px;font-weight:bold;color:#526579}.foot{margin-top:40px;border-top:1px solid #ddd;padding-top:20px;color:#64748b}@media print{button{display:none}}
+/* Ajuste de luminosidade, contraste e nitidez do ecrã de entrada */
+.login-brand{
+ background-image:
+ linear-gradient(180deg,rgba(4,39,78,.02) 0%,rgba(4,48,94,.03) 48%,rgba(4,49,105,.48) 100%),
+ url("https://images.pexels.com/photos/10827916/pexels-photo-10827916.jpeg?cs=srgb&dl=pexels-maxmishin-10827916.jpg&fm=jpg") !important;
+ background-position:center center !important;
+ background-size:cover !important;
+ background-color:#dceeff;
+}
+.login-brand:after{background:linear-gradient(90deg,rgba(255,255,255,.02),transparent 55%) !important}
+.login-brand .brand-title,.login-brand .brand-copy,.login-brand .brand-foot{
+ text-shadow:0 2px 5px rgba(0,35,78,.72) !important;
+}
+.login-panel{background:#fff !important;box-shadow:-12px 0 42px rgba(20,66,120,.07) !important}
+.login-card h1{color:#0b3974 !important}
+.login-card .muted{color:#526b8b !important}
+.field label{color:#29496f !important}
+.field input,.field select,.field textarea{
+ background:#fff !important;border:1.5px solid #b8cbe4 !important;color:#17395f !important;
+ box-shadow:0 1px 3px rgba(22,58,103,.04) !important;
+}
+.field input::placeholder,.field textarea::placeholder{color:#7185a2 !important;opacity:1}
+.auth-tabs{background:#eaf1fb !important}
+.auth-tab.active{color:#075bbb !important}
+.btn-primary{background:#086bdc !important;box-shadow:0 5px 14px rgba(8,107,220,.18)}
+</style><header>'+(logoUrl?'<img src="'+esc(logoUrl)+'" style="max-width:170px;max-height:85px;object-fit:contain;margin-bottom:10px">':'')+'<h1>'+esc(inst.header_title||inst.legal_name||'NOVA HOSPITAL ERP')+'</h1><div>'+esc(inst.address_text||'')+'</div><div>'+esc(inst.contact_phone||'')+' · '+esc(inst.contact_email||'')+'</div></header><h2>'+esc(title)+'</h2><table>'+rows.filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='').map(x=>'<tr><td>'+esc(x[0])+'</td><td>'+esc(x[1])+'</td></tr>').join('')+'</table><div class="foot">'+esc(inst.footer_text||'Documento gerado pelo NOVA HOSPITAL ERP')+'</div></html>');w.document.close();w.focus();w.print();
  }
 
 
