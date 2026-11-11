@@ -466,10 +466,10 @@ async function loadReceptionDocuments(){
    ]);
    for(const z of [w,r,b,a])if(z.error)throw z.error;
    inpatientWards=w.data||[];inpatientRooms=r.data||[];inpatientBeds=b.data||[];inpatientAdmissions=a.data||[];inpatientProfessionals=p.error?[]:(p.data||[]);
-   const activeIds=inpatientAdmissions.filter(x=>x.status==='admitted').map(x=>x.id),patientIds=[...new Set(inpatientAdmissions.map(x=>x.patient_id))];
+   const admissionIds=inpatientAdmissions.map(x=>x.id),patientIds=[...new Set(inpatientAdmissions.map(x=>x.patient_id))];
    const [patients,events]=await Promise.all([
     patientIds.length?supabase.schema('patient').from('records').select('id,full_name,preferred_name,patient_number').eq('organization_id',oid).in('id',patientIds):Promise.resolve({data:[],error:null}),
-    activeIds.length?supabase.schema('hospital').from('inpatient_events').select('id,admission_id,event_type,previous_status,new_status,event_data,actor_user_id,occurred_at').eq('organization_id',oid).in('admission_id',activeIds).order('occurred_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null})
+    admissionIds.length?supabase.schema('hospital').from('inpatient_events').select('id,admission_id,event_type,previous_status,new_status,event_data,actor_user_id,occurred_at').eq('organization_id',oid).in('admission_id',admissionIds).order('occurred_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null})
    ]);
    if(patients.error)console.warn('Nomes dos pacientes indisponíveis:',patients.error.message);
    if(events.error)throw events.error;
