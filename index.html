@@ -1029,6 +1029,7 @@ async function loadReceptionDocuments(){
  '<section class="panel"><h2>Fluxo de admissão</h2><p class="muted small">A recepção regista a chegada e cria o episódio de urgência. Após triagem e avaliação médica, o paciente pode ser encaminhado para internamento, bloco operatório, outro serviço ou alta, conforme decisão clínica.</p><div class="toolbar"><button class="btn btn-outline" type="button" id="emergencyGoReception">Abrir recepção</button><button class="btn btn-outline" type="button" id="emergencyGoInpatient">Abrir internamento</button><button class="btn btn-outline" type="button" id="emergencyGoClinical">Abrir processo clínico</button></div></section>';
  }
  let emergencyDepartments=[];
+ let currentEmergencyCase=null;
  async function loadEmergencyWorkspace(){
   const status=$('emergencyStatus'),facilitySelect=$('emergencyFacility');if(!facilitySelect)return;
   status.textContent='A consultar unidades e serviços de urgência…';
@@ -1077,7 +1078,7 @@ async function loadReceptionDocuments(){
   host.querySelectorAll('[data-emergency-triage]').forEach(btn=>btn.addEventListener('click',()=>{$('receptionTriageVisitId').value=btn.dataset.emergencyTriage;$('receptionTriagePanel').classList.remove('hidden');$('receptionTriagePanel').scrollIntoView({behavior:'smooth',block:'start'})}));
   host.querySelectorAll('[data-emergency-status]').forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;try{await call('patient','update_reception_visit_status',{p_reception_visit_id:btn.dataset.emergencyStatus,p_new_status:btn.dataset.next,p_reception_note:'Actualização no módulo de Urgência'});toast('Estado do atendimento actualizado.');await loadEmergencyQueue()}catch(err){toast(err.message||'Falha ao actualizar estado.','error');btn.disabled=false}}));
   host.querySelectorAll('[data-emergency-open-case]').forEach(btn=>btn.addEventListener('click',async()=>{const row=rows.find(x=>x.reception_visit_id===btn.dataset.emergencyOpenCase);btn.disabled=true;try{await openEmergencyClinicalCase(row)}catch(err){toast(err.message||'Não foi possível abrir o episódio clínico.','error');btn.disabled=false}}));
-  host.querySelectorAll('[data-emergency-case-panel]').forEach(btn=>btn.addEventListener('click',()=>{const c=caseMap.get(rows.find(x=>x.reception_visit_id===caseMap.get(btn.dataset.emergencyCasePanel)?.reception_visit_id)?.reception_visit_id);const row=rows.find(x=>x.reception_visit_id===c?.reception_visit_id);if(c)showEmergencyCasePanel(c,row).catch(err=>toast(err.message||'Falha ao abrir acompanhamento.','error'))}));
+  host.querySelectorAll('[data-emergency-case-panel]').forEach(btn=>btn.addEventListener('click',()=>{const c=cases.find(x=>x.id===btn.dataset.emergencyCasePanel),row=rows.find(x=>x.reception_visit_id===c?.reception_visit_id);if(c)showEmergencyCasePanel(c,row).catch(err=>toast(err.message||'Falha ao abrir acompanhamento.','error'))}));
  }
  async function openEmergencyClinicalCase(queueRow){
   if(!queueRow)throw new Error('Entrada de urgência não encontrada.');
@@ -1090,7 +1091,7 @@ async function loadReceptionDocuments(){
   toast('Episódio de urgência ligado ao processo clínico.');
  }
  async function showEmergencyCasePanel(caseRecord,queueRow){
-  currentEmergencyCase={...caseRecord,patient_id:caseRecord.patient_id||queueRow?.patient_id,reception_visit_id:caseRecord.reception_visit_id};
+  currentEmergencyCase={...caseRecord,patient_id:caseRecord.patient_id||queueRow?.patient_id,reception_visit_id:caseRecord.reception_visit_id,_queueRow:queueRow||null};
   const panel=$('emergencyCasePanel');panel.classList.remove('hidden');panel.scrollIntoView({behavior:'smooth',block:'start'});
   $('emergencyCaseTitle').textContent='Episódio de urgência · '+(queueRow?.patient_display_name||'Paciente');
   $('emergencyCaseMeta').textContent='Abertura: '+new Date(caseRecord.opened_at).toLocaleString('pt-AO')+' · Processo clínico associado';
@@ -1113,7 +1114,7 @@ async function loadReceptionDocuments(){
    await publicCall('api_transition_emergency_case',{p_organization_id:org(),p_emergency_case_id:currentEmergencyCase.id,p_new_status:next,p_note:note,p_outcome:next==='closed'?'discharged':null});
    $('emergencyCaseNote').value='';toast(next==='closed'?'Alta da urgência registada.':'Evolução do episódio actualizada.');
    const {data,error}=await supabase.schema('hospital').from('emergency_cases').select('id,reception_visit_id,patient_id,encounter_id,case_status,outcome,opened_at,closed_at').eq('organization_id',org()).eq('id',currentEmergencyCase.id).single();if(error)throw error;
-   const row=emergencyDepartments.length?null:null;await showEmergencyCasePanel(data,row);await loadEmergencyQueue();
+   await showEmergencyCasePanel(data,currentEmergencyCase?._queueRow||null);await loadEmergencyQueue();
   }finally{if(btn)btn.disabled=false}
  }
  function renderModules(){
@@ -1121,7 +1122,7 @@ async function loadReceptionDocuments(){
    nursing:['✚','Enfermagem','Cuidados de enfermagem, sinais vitais, administração e planos de cuidados.','Módulo de enfermagem em integração com profissionais e registos autorizados.'],
    outpatient:['♙','Consulta externa','Consultas, admissões ambulatórias e seguimento.','Cadastro de pacientes disponível; fluxo clínico em integração.'],
    inpatient:['▤','Internamento e camas','Enfermarias, quartos, camas, admissões, transferências e altas.','Backend de internamento implementado; camas reais dependem de cadastro.'],
-   emergency:['✚','Urgência','Triagem, classificação de risco e atendimento urgente.','Área configurada; interface operacional por integrar.'],
+   emergency:['✚','Urgência','Triagem, episódios clínicos, evolução assistencial e desfecho.','Fluxo inicial operacional; exames e integração de internamento em expansão.'],
    surgery:['⚕','Cirurgia / Bloco operatório','Agendamento cirúrgico, equipas, salas e consumíveis.','Área configurada; interface operacional por integrar.'],
    maternity:['♧','Maternidade','Admissão obstétrica, parto, puerpério e recém-nascido.','Área configurada; interface operacional por integrar.'],
    pediatrics:['♡','Pediatria','Atendimento pediátrico, acompanhamento e vacinação.','Área configurada; interface operacional por integrar.'],
