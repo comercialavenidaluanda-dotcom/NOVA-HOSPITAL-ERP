@@ -1025,6 +1025,7 @@ async function loadReceptionDocuments(){
  '<div class="grid" id="emergencyStats">'+stat('Entradas','—','No serviço seleccionado')+stat('Triagem pendente','—','A aguardar avaliação')+stat('Prioridade imediata','—','Vermelho / laranja')+stat('Em atendimento','—','Em avaliação clínica')+'</div>'+
  '<section class="panel"><div class="panel-head"><div><h2>Fila de urgência</h2><p class="muted small">Os pacientes são apresentados por chegada. A classificação de risco deve ser registada por profissional autorizado.</p></div><span class="status" id="emergencyCount">0 entradas</span></div><div id="emergencyQueue"><div class="empty">A seleccionar unidade…</div></div></section>'+
  '<section class="panel hidden" id="receptionTriagePanel"><div class="panel-head"><div><h2>Avaliação clínica de triagem</h2><p class="muted small">Registe a prioridade, queixa principal e sinais vitais. A classificação deve seguir o protocolo clínico adoptado pela instituição.</p></div><span class="status">Registo clínico</span></div><form id="receptionTriageForm"><input type="hidden" id="receptionTriageVisitId"><div class="form-grid"><div class="field"><label>CLASSIFICAÇÃO DE RISCO</label><select id="receptionTriageLevel" required><option value="">Seleccione a classificação</option><option value="red">Vermelho — imediato</option><option value="orange">Laranja — muito urgente</option><option value="yellow">Amarelo — urgente</option><option value="green">Verde — pouco urgente</option><option value="blue">Azul — não urgente</option></select></div><div class="field wide"><label>QUEIXA PRINCIPAL *</label><input id="receptionTriageComplaint" required maxlength="1000"></div><div class="field"><label>PRESSÃO ARTERIAL</label><input id="triageBP" placeholder="120/80"></div><div class="field"><label>FREQUÊNCIA CARDÍACA</label><input id="triageHR" type="number" min="0" max="300"></div><div class="field"><label>TEMPERATURA °C</label><input id="triageTemp" type="number" step="0.1" min="25" max="45"></div><div class="field"><label>FREQUÊNCIA RESPIRATÓRIA</label><input id="triageRR" type="number" min="0" max="100"></div><div class="field"><label>SATURAÇÃO O₂ %</label><input id="triageSpo2" type="number" min="0" max="100"></div><div class="field"><label>PESO kg</label><input id="triageWeight" type="number" step="0.1" min="0"></div><div class="field wide"><label>OBSERVAÇÃO CLÍNICA</label><textarea id="receptionTriageObservation" rows="3" maxlength="3000"></textarea></div></div><div class="toolbar"><button class="btn btn-primary" type="submit">Guardar avaliação de triagem</button><button class="btn btn-outline" type="button" id="emergencyCancelTriage">Cancelar</button></div></form></section>'+
+ '<section class="panel hidden" id="emergencyCasePanel"><div class="panel-head"><div><h2 id="emergencyCaseTitle">Acompanhamento do episódio</h2><p class="small muted" id="emergencyCaseMeta"></p></div><span class="status" id="emergencyCaseStatus">—</span></div><form id="emergencyCaseTransitionForm"><div class="form-grid"><div class="field"><label>PRÓXIMA FASE</label><select id="emergencyCaseNextStatus" required></select></div><div class="field wide"><label>NOTA DE EVOLUÇÃO / JUSTIFICAÇÃO *</label><textarea id="emergencyCaseNote" rows="3" minlength="5" maxlength="4000" required placeholder="Registe a evolução, decisão clínica ou fundamento do encaminhamento."></textarea></div></div><div class="toolbar"><button class="btn btn-primary" type="submit">Registar evolução</button><button class="btn btn-outline" type="button" id="emergencyCaseOpenClinical">Abrir processo clínico completo</button></div><p class="small muted">A alta encerra apenas o episódio de urgência. A admissão hospitalar, transferência e cirurgia serão confirmadas pelos respectivos fluxos operacionais antes de serem marcadas como concluídas.</p></form><div class="section-kicker">HISTÓRICO DE EVOLUÇÃO</div><div id="emergencyCaseEvents"><div class="empty">Seleccione um episódio.</div></div></section>'+
  '<section class="panel"><h2>Fluxo de admissão</h2><p class="muted small">A recepção regista a chegada e cria o episódio de urgência. Após triagem e avaliação médica, o paciente pode ser encaminhado para internamento, bloco operatório, outro serviço ou alta, conforme decisão clínica.</p><div class="toolbar"><button class="btn btn-outline" type="button" id="emergencyGoReception">Abrir recepção</button><button class="btn btn-outline" type="button" id="emergencyGoInpatient">Abrir internamento</button><button class="btn btn-outline" type="button" id="emergencyGoClinical">Abrir processo clínico</button></div></section>';
  }
  let emergencyDepartments=[];
@@ -1049,24 +1050,71 @@ async function loadReceptionDocuments(){
   const facilityId=$('emergencyFacility')?.value,departmentId=$('emergencyDepartment')?.value,date=$('emergencyDate')?.value,host=$('emergencyQueue');if(!facilityId||!departmentId||!date||!host)return;
   host.innerHTML='<div class="empty">A consultar fila de urgência…</div>';
   try{
-   const range=receptionDateRange(date),rows=await publicCall('api_get_reception_queue',{p_organization_id:org(),p_facility_id:facilityId,p_department_id:departmentId,p_from:range.from,p_to:range.to});
-   renderEmergencyQueue(Array.isArray(rows)?rows:[]);
+   const range=receptionDateRange(date),[queue,casesResult]=await Promise.all([
+    publicCall('api_get_reception_queue',{p_organization_id:org(),p_facility_id:facilityId,p_department_id:departmentId,p_from:range.from,p_to:range.to}),
+    supabase.schema('hospital').from('emergency_cases').select('id,reception_visit_id,patient_id,encounter_id,case_status,outcome,opened_at,closed_at').eq('organization_id',org()).eq('facility_id',facilityId).eq('department_id',departmentId)
+   ]);
+   if(casesResult.error)throw casesResult.error;
+   renderEmergencyQueue(Array.isArray(queue)?queue:[],casesResult.data||[]);
    $('emergencyStatus').textContent='Fila actualizada às '+new Date().toLocaleTimeString('pt-AO',{timeZone:'Africa/Luanda',hour:'2-digit',minute:'2-digit'})+'.';
   }catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Falha ao consultar fila de urgência.')+'</div>';throw err}
  }
- function renderEmergencyQueue(rows){
-  const host=$('emergencyQueue'),stats=$('emergencyStats');const pending=rows.filter(x=>x.triage_status==='pending').length,active=rows.filter(x=>x.queue_status==='with_professional').length;
-  const assessed=rows.filter(x=>x.triage_status==='assessed').length;stats.innerHTML=stat('Entradas',String(rows.length),'No serviço seleccionado')+stat('Triagem pendente',String(pending),'A aguardar avaliação')+stat('Triagem concluída',String(assessed),'Classificação registada')+stat('Em atendimento',String(active),'Em avaliação clínica');
+ function emergencyCaseStatusLabel(s){return ({triaged:'Triado',assessment:'Em avaliação médica',diagnostics_pending:'A aguardar exames',treatment:'Em tratamento',disposition_pending:'Decisão clínica',closed:'Episódio encerrado'})[s]||s||'—';}
+ function renderEmergencyQueue(rows,cases){
+  const host=$('emergencyQueue'),stats=$('emergencyStats'),caseMap=new Map(cases.map(c=>[c.reception_visit_id,c]));
+  const pending=rows.filter(x=>x.triage_status==='pending').length,active=rows.filter(x=>x.queue_status==='with_professional').length;
+  const assessed=rows.filter(x=>x.triage_status==='assessed').length,openCases=cases.filter(x=>x.case_status!=='closed').length;
+  stats.innerHTML=stat('Entradas',String(rows.length),'No serviço seleccionado')+stat('Triagem pendente',String(pending),'A aguardar avaliação')+stat('Episódios clínicos',String(openCases),'Em acompanhamento')+stat('Em atendimento',String(active),'Em avaliação clínica');
   $('emergencyCount').textContent=rows.length+' entrada(s)';
   if(!rows.length){host.innerHTML='<div class="empty">Não existem entradas de urgência nesta unidade e data. Para registar uma chegada, utilize a recepção.</div>';return}
-  host.innerHTML='<div class="table-wrap"><table><thead><tr><th>Chegada</th><th>Paciente</th><th>Queixa / motivo</th><th>Triagem</th><th>Estado</th><th>Acção</th></tr></thead><tbody>'+rows.map(r=>{
-   const triage=r.triage_status==='pending'?'Pendente':r.triage_status==='assessed'?'Avaliada':'Não aplicável';
+  host.innerHTML='<div class="table-wrap"><table><thead><tr><th>Chegada</th><th>Paciente</th><th>Queixa / motivo</th><th>Triagem</th><th>Estado</th><th>Episódio clínico</th><th>Acção</th></tr></thead><tbody>'+rows.map(r=>{
+   const triage=r.triage_status==='pending'?'Pendente':r.triage_status==='assessed'?'Avaliada':'Não aplicável',caseRecord=caseMap.get(r.reception_visit_id);
    const next=r.queue_status==='waiting'&&r.triage_status==='assessed'?['ready','Encaminhar']:r.queue_status==='triaged'?['ready','Preparar atendimento']:r.queue_status==='ready'?['with_professional','Iniciar atendimento']:r.queue_status==='with_professional'?['completed','Concluir atendimento']:null;
    const action=r.triage_status==='pending'?(r.can_assess_triage?'<button class="btn btn-primary small" data-emergency-triage="'+esc(r.reception_visit_id)+'">Avaliar triagem</button>':'<span class="small muted">A aguardar profissional autorizado</span>'):(next?'<button class="btn btn-outline small" data-emergency-status="'+esc(r.reception_visit_id)+'" data-next="'+next[0]+'">'+next[1]+'</button>':'<span class="small muted">Sem acção pendente</span>');
-   return '<tr><td>'+receptionTime(r.arrived_at)+'</td><td><b>'+esc(r.patient_display_name||'Paciente')+'</b><div class="small muted">'+esc(r.patient_number||'')+'</div></td><td>'+esc(r.visit_reason||'—')+'</td><td><span class="status '+(r.triage_status==='pending'?'warn':'')+'">'+triage+'</span></td><td>'+receptionStatusLabel(r.queue_status)+'</td><td>'+action+'</td></tr>';
+   const episode=caseRecord?'<span class="status '+(caseRecord.case_status==='closed'?'off':'')+'">'+esc(emergencyCaseStatusLabel(caseRecord.case_status))+'</span><div class="toolbar"><button class="btn btn-outline small" data-emergency-case-panel="'+esc(caseRecord.id)+'">Acompanhar</button></div>':(r.triage_status==='assessed'?'<button class="btn btn-primary small" data-emergency-open-case="'+esc(r.reception_visit_id)+'">Abrir episódio clínico</button>':'<span class="small muted">Após triagem</span>');
+   return '<tr><td>'+receptionTime(r.arrived_at)+'</td><td><b>'+esc(r.patient_display_name||'Paciente')+'</b><div class="small muted">'+esc(r.patient_number||'')+'</div></td><td>'+esc(r.visit_reason||'—')+'</td><td><span class="status '+(r.triage_status==='pending'?'warn':'')+'">'+triage+'</span></td><td>'+receptionStatusLabel(r.queue_status)+'</td><td>'+episode+'</td><td>'+action+'</td></tr>';
   }).join('')+'</tbody></table></div>';
   host.querySelectorAll('[data-emergency-triage]').forEach(btn=>btn.addEventListener('click',()=>{$('receptionTriageVisitId').value=btn.dataset.emergencyTriage;$('receptionTriagePanel').classList.remove('hidden');$('receptionTriagePanel').scrollIntoView({behavior:'smooth',block:'start'})}));
   host.querySelectorAll('[data-emergency-status]').forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;try{await call('patient','update_reception_visit_status',{p_reception_visit_id:btn.dataset.emergencyStatus,p_new_status:btn.dataset.next,p_reception_note:'Actualização no módulo de Urgência'});toast('Estado do atendimento actualizado.');await loadEmergencyQueue()}catch(err){toast(err.message||'Falha ao actualizar estado.','error');btn.disabled=false}}));
+  host.querySelectorAll('[data-emergency-open-case]').forEach(btn=>btn.addEventListener('click',async()=>{const row=rows.find(x=>x.reception_visit_id===btn.dataset.emergencyOpenCase);btn.disabled=true;try{await openEmergencyClinicalCase(row)}catch(err){toast(err.message||'Não foi possível abrir o episódio clínico.','error');btn.disabled=false}}));
+  host.querySelectorAll('[data-emergency-case-panel]').forEach(btn=>btn.addEventListener('click',()=>{const c=caseMap.get(rows.find(x=>x.reception_visit_id===caseMap.get(btn.dataset.emergencyCasePanel)?.reception_visit_id)?.reception_visit_id);const row=rows.find(x=>x.reception_visit_id===c?.reception_visit_id);if(c)showEmergencyCasePanel(c,row).catch(err=>toast(err.message||'Falha ao abrir acompanhamento.','error'))}));
+ }
+ async function openEmergencyClinicalCase(queueRow){
+  if(!queueRow)throw new Error('Entrada de urgência não encontrada.');
+  const result=await publicCall('api_open_emergency_case',{p_organization_id:org(),p_reception_visit_id:queueRow.reception_visit_id}),record=Array.isArray(result)?result[0]:result;
+  if(!record?.encounter_id)throw new Error('O servidor não confirmou a abertura do episódio clínico.');
+  currentEmergencyCase={...record,reception_visit_id:queueRow.reception_visit_id};
+  navigate('clinical');
+  await selectClPatient({patient_id:record.patient_id,preferred_name:queueRow.patient_display_name||'Paciente',full_name:queueRow.patient_display_name||'Paciente',patient_number:queueRow.patient_number||''});
+  await openClEncounter({encounter_id:record.encounter_id,encounter_number:record.encounter_number,encounter_type:'emergency',encounter_status:'open',opened_at:record.opened_at});
+  toast('Episódio de urgência ligado ao processo clínico.');
+ }
+ async function showEmergencyCasePanel(caseRecord,queueRow){
+  currentEmergencyCase={...caseRecord,patient_id:caseRecord.patient_id||queueRow?.patient_id,reception_visit_id:caseRecord.reception_visit_id};
+  const panel=$('emergencyCasePanel');panel.classList.remove('hidden');panel.scrollIntoView({behavior:'smooth',block:'start'});
+  $('emergencyCaseTitle').textContent='Episódio de urgência · '+(queueRow?.patient_display_name||'Paciente');
+  $('emergencyCaseMeta').textContent='Abertura: '+new Date(caseRecord.opened_at).toLocaleString('pt-AO')+' · Processo clínico associado';
+  $('emergencyCaseStatus').textContent=emergencyCaseStatusLabel(caseRecord.case_status);
+  const nextOptions={triaged:[['assessment','Iniciar avaliação médica']],assessment:[['diagnostics_pending','Solicitar / aguardar exames'],['treatment','Iniciar tratamento'],['disposition_pending','Registar decisão clínica']],diagnostics_pending:[['assessment','Retomar avaliação médica'],['treatment','Iniciar tratamento'],['disposition_pending','Registar decisão clínica']],treatment:[['assessment','Reavaliar paciente'],['disposition_pending','Registar decisão clínica']],disposition_pending:[['closed','Dar alta da urgência']]};
+  const options=nextOptions[caseRecord.case_status]||[];
+  $('emergencyCaseNextStatus').innerHTML=options.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('');
+  $('emergencyCaseTransitionForm').classList.toggle('hidden',!options.length);
+  $('emergencyCaseOpenClinical').onclick=async()=>{try{const row=queueRow||{reception_visit_id:caseRecord.reception_visit_id,patient_id:caseRecord.patient_id,patient_display_name:'Paciente',patient_number:''};await openEmergencyClinicalCase(row)}catch(err){toast(err.message||'Falha ao abrir processo clínico.','error')}};
+  const host=$('emergencyCaseEvents');host.innerHTML='<div class="empty">A consultar histórico…</div>';
+  const {data,error}=await supabase.schema('hospital').from('emergency_case_events').select('id,from_status,to_status,note,actor_user_id,occurred_at').eq('organization_id',org()).eq('emergency_case_id',caseRecord.id).order('occurred_at',{ascending:false});
+  if(error)throw error;
+  host.innerHTML=data?.length?'<div class="table-wrap"><table><thead><tr><th>Data</th><th>Fase</th><th>Registo</th></tr></thead><tbody>'+data.map(e=>'<tr><td>'+esc(new Date(e.occurred_at).toLocaleString('pt-AO'))+'</td><td>'+esc(emergencyCaseStatusLabel(e.to_status))+'</td><td>'+esc(e.note||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Sem eventos de evolução.</div>';
+ }
+ async function saveEmergencyCaseTransition(e){
+  e.preventDefault();if(!currentEmergencyCase?.id)throw new Error('Seleccione um episódio de urgência.');
+  const next=$('emergencyCaseNextStatus').value,note=$('emergencyCaseNote').value.trim(),btn=e.submitter;if(btn)btn.disabled=true;
+  try{
+   if(!next)throw new Error('Não existe uma fase seguinte disponível.');
+   await publicCall('api_transition_emergency_case',{p_organization_id:org(),p_emergency_case_id:currentEmergencyCase.id,p_new_status:next,p_note:note,p_outcome:next==='closed'?'discharged':null});
+   $('emergencyCaseNote').value='';toast(next==='closed'?'Alta da urgência registada.':'Evolução do episódio actualizada.');
+   const {data,error}=await supabase.schema('hospital').from('emergency_cases').select('id,reception_visit_id,patient_id,encounter_id,case_status,outcome,opened_at,closed_at').eq('organization_id',org()).eq('id',currentEmergencyCase.id).single();if(error)throw error;
+   const row=emergencyDepartments.length?null:null;await showEmergencyCasePanel(data,row);await loadEmergencyQueue();
+  }finally{if(btn)btn.disabled=false}
  }
  function renderModules(){
   const labels={
@@ -1132,6 +1180,7 @@ async function loadReceptionDocuments(){
   if($('emergencyGoInpatient'))$('emergencyGoInpatient').addEventListener('click',()=>navigate('inpatient'));
   if($('emergencyGoClinical'))$('emergencyGoClinical').addEventListener('click',()=>navigate('clinical'));
   if($('emergencyCancelTriage'))$('emergencyCancelTriage').addEventListener('click',()=>{$('receptionTriagePanel').classList.add('hidden');$('receptionTriageForm').reset()});
+  if($('emergencyCaseTransitionForm'))$('emergencyCaseTransitionForm').addEventListener('submit',e=>saveEmergencyCaseTransition(e).catch(err=>toast(err.message||'Falha ao registar evolução.','error')));
   if($('clSearch'))$('clSearch').addEventListener('click',searchClPatients);
   if($('clPatientQuery'))$('clPatientQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchClPatients()}});
   if($('clEncounterForm'))$('clEncounterForm').addEventListener('submit',createClEncounter);
