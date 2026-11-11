@@ -666,7 +666,7 @@ async function loadReceptionDocuments(){
  }
  async function loadFinanceWorkspace(){
   const host=$('financeCashWorkspace');if(!host)return;
-  try{financeWorkspace=await publicCall('api_finance_workspace',{p_organization_id:org()});renderFinanceWorkspace();}
+  try{financeWorkspace=await publicCall('api_finance_workspace',{p_organization_id:org()});renderFinanceWorkspace();await loadAgtWorkspace().catch(err=>{const n=$('agtEngineNotice');if(n)n.textContent=err.message||'Sem acesso à configuração AGT';});}
   catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Sem acesso financeiro')+'</div>';throw err;}
 
  let agtWorkspace=null;
