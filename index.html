@@ -575,9 +575,48 @@ async function loadReceptionDocuments(){
 
  function renderStaff(){return `${pageHead('Profissionais','Gestão de profissionais, especialidades, serviços e permissões.')}<section class="panel"><h2>Estado do cadastro profissional</h2><p class="muted small">O backend já contém a estrutura hospitalar e de psicologia. A aprovação de profissionais pendentes exige decisão administrativa explícita.</p><div class="notice warn">Nenhum profissional pendente será aprovado automaticamente nesta interface inicial.</div><span class="status">Acesso condicionado por permissões</span></section>`}
 
+
+ function renderInstitutionalServiceCatalog(){return '<section class="panel" id="institutionalCatalogPanel"><div class="panel-head"><div><h2>Catálogo institucional de áreas e serviços</h2><p class="muted small">Active apenas os serviços que a instituição possui. O catálogo é uma referência; não cria departamentos, profissionais, salas, camas ou atendimentos.</p></div><span class="status">Configuração por unidade</span></div><div class="toolbar"><div class="field" style="min-width:260px;flex:1"><label>UNIDADE HOSPITALAR</label><select id="catalogFacility"></select></div><button class="btn btn-outline" type="button" id="catalogRefresh">Actualizar catálogo</button></div><div id="catalogExistingDepartments" class="notice">A consultar departamentos existentes…</div><div id="institutionalCatalogList"><div class="empty">A carregar catálogo institucional…</div></div><div class="toolbar"><button class="btn btn-primary" type="button" id="saveInstitutionalCatalog">Guardar serviços seleccionados</button><span id="catalogFeedback" class="small muted">As alterações só serão aplicadas após guardar.</span></div></section>';}
+ async function loadInstitutionalServiceCatalog(){
+  const host=$('institutionalCatalogList');if(!host)return;host.innerHTML='<div class="empty">A carregar catálogo…</div>';
+  const [departments,catalog,selected]=await Promise.all([
+   publicCall('api_get_reception_departments',{p_organization_id:org()}),
+   supabase.schema('hospital').from('service_catalog_reference').select('code,area_code,name,entry_type,description,sort_order').eq('is_active',true).order('sort_order'),
+   supabase.schema('hospital').from('organization_service_catalog').select('id,facility_id,catalog_code,enabled,department_id,notes').eq('organization_id',org())
+  ]);
+  if(catalog.error)throw catalog.error;if(selected.error)throw selected.error;
+  const ds=Array.isArray(departments)?departments:[],facilities=[...new Map(ds.map(d=>[d.facility_id,{id:d.facility_id,name:d.facility_name,code:d.facility_code}])).values()];
+  const fs=$('catalogFacility');const previous=fs.value;fs.innerHTML=facilities.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+' · '+esc(f.code||'')+'</option>').join('');
+  if(previous&&facilities.some(f=>f.id===previous))fs.value=previous;
+  if(!facilities.length){fs.innerHTML='<option value="">Sem unidade activa</option>';host.innerHTML='<div class="empty">Não existem unidades hospitalares acessíveis nesta instituição.</div>';$('catalogExistingDepartments').textContent='Sem unidades e departamentos disponíveis.';return}
+  window.__novaCatalogState={catalog:catalog.data||[],selected:selected.data||[],departments:ds};
+  renderInstitutionalCatalogForFacility();
+ }
+ function renderInstitutionalCatalogForFacility(){
+  const state=window.__novaCatalogState;if(!state)return;const facilityId=$('catalogFacility')?.value,selected=state.selected.filter(x=>x.facility_id===facilityId),selectedMap=new Map(selected.map(x=>[x.catalog_code,x]));
+  const departments=state.departments.filter(d=>d.facility_id===facilityId&&d.department_type!=='administration');
+  const existing=$('catalogExistingDepartments');existing.innerHTML=departments.length?'<b>Departamentos já existentes nesta unidade</b><br>'+departments.map(d=>esc(d.department_name)+' <span class="muted">('+esc(d.department_type||'sem tipo')+')</span>').join(' · '):'Ainda não existem departamentos assistenciais nesta unidade. Os registos existentes não serão substituídos.';
+  const areas=state.catalog.filter(x=>x.entry_type==='area'),entries=state.catalog.filter(x=>x.entry_type!=='area');
+  const host=$('institutionalCatalogList');
+  host.innerHTML=areas.map(area=>{const rows=entries.filter(x=>x.area_code===area.area_code);return '<section class="panel" style="margin:12px 0;background:var(--surface, #fff)"><div class="panel-head"><div><h3>'+esc(area.name)+'</h3><p class="small muted">'+esc(area.description||'')+'</p></div><span class="status">'+rows.length+' opções</span></div><div class="form-grid">'+rows.map(item=>{const current=selectedMap.get(item.code);return '<label class="field" style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px"><input type="checkbox" data-catalog-code="'+esc(item.code)+'" '+(current?.enabled?'checked':'')+' style="margin-top:3px"><span><b>'+esc(item.name)+'</b><small class="muted" style="display:block">'+esc(item.description||'')+'</small></span></label>'}).join('')+'</div></section>'}).join('');
+  $('catalogFeedback').textContent=selected.length+' configuração(ões) guardada(s) nesta unidade.';
+ }
+ async function saveInstitutionalServiceCatalog(){
+  const btn=$('saveInstitutionalCatalog'),feedback=$('catalogFeedback'),facilityId=$('catalogFacility')?.value,state=window.__novaCatalogState;
+  if(!facilityId||!state)throw new Error('Seleccione uma unidade hospitalar.');
+  btn.disabled=true;feedback.textContent='A guardar configurações…';
+  try{
+   const rows=[...$('institutionalCatalogList').querySelectorAll('[data-catalog-code]')].map(el=>({organization_id:org(),facility_id:facilityId,catalog_code:el.dataset.catalogCode,enabled:el.checked,updated_by:currentUser?.id||null,updated_at:new Date().toISOString(),created_by:currentUser?.id||null}));
+   const {error}=await supabase.schema('hospital').from('organization_service_catalog').upsert(rows,{onConflict:'organization_id,facility_id,catalog_code'});
+   if(error)throw error;
+   feedback.textContent='Configuração guardada no Supabase.';toast('Catálogo institucional actualizado.');await loadInstitutionalServiceCatalog();
+  }catch(err){feedback.textContent=err.message||'Não foi possível guardar.';throw err}
+  finally{btn.disabled=false}
+ }
  function renderDefinitions(){return pageHead('Definições institucionais','Centro de administração da identidade, aparência, cadastro, módulos e documentos da instituição.')+
  '<div class="notice">As definições são aplicadas por instituição. As alterações são registadas na auditoria e não modificam documentos clínicos ou fiscais já emitidos.</div>'+
  renderCapacitySettings()+
+ renderInstitutionalServiceCatalog()+
  '<section class="panel"><h2>Identidade e cadastro institucional</h2><p class="muted small">Dados legais e operacionais que identificam a entidade hospitalar.</p><form id="institutionSettingsForm"><div class="form-grid">'+
  '<div class="field"><label>Denominação legal *</label><input id="setOrgLegalName" maxlength="200" required></div><div class="field"><label>Nome comercial / hospital *</label><input id="setOrgDisplayName" maxlength="120" required></div>'+
  '<div class="field"><label>Identificador institucional *</label><input id="setOrgSlug" maxlength="80" required></div><div class="field"><label>NIF *</label><input id="setOrgTaxId" maxlength="40" required></div>'+
@@ -1031,7 +1070,7 @@ async function loadReceptionDocuments(){
  }
  const renderers={overview:renderOverview,patients:renderPatients,reception:renderReception,documents:renderDocumentCenter,accounting:renderAccounting,finance:renderFinance,inpatient:renderInpatient,psychology:renderPsychology,clinical:renderClinical,staff:renderStaff,definitions:renderDefinitions,modules:renderModules,moduleWorkspace:renderModuleWorkspace};
  const titles={overview:'Painel geral',patients:'Pacientes',reception:'Recepção',documents:'Documentos hospitalares',accounting:'Contabilidade',finance:'Financeiro e facturação',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',definitions:'Definições técnicas',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
- function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='documents')loadDocumentCenter().catch(err=>toast(err.message||'Falha ao abrir centro documental','error'));if(page==='finance')loadFinanceWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo financeiro','error'));if(page==='inpatient')loadInpatientWorkspace();if(page==='accounting')loadAccountingWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo de contabilidade','error'));if(page==='definitions'){loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
+ function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='documents')loadDocumentCenter().catch(err=>toast(err.message||'Falha ao abrir centro documental','error'));if(page==='finance')loadFinanceWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo financeiro','error'));if(page==='inpatient')loadInpatientWorkspace();if(page==='accounting')loadAccountingWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo de contabilidade','error'));if(page==='definitions'){loadInstitutionalServiceCatalog().catch(err=>{const h=$('institutionalCatalogList');if(h)h.innerHTML='<div class="notice error">Falha ao carregar catálogo: '+esc(err.message||'erro desconhecido')+'</div>';});loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
  function bindPage(){
   if($('clSearch'))$('clSearch').addEventListener('click',searchClPatients);
   if($('clPatientQuery'))$('clPatientQuery').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchClPatients()}});
@@ -1081,7 +1120,10 @@ async function loadReceptionDocuments(){
    if($('docCenterPreview'))$('docCenterPreview').addEventListener('click',previewDocumentCenter);
    if($('docCenterIssueForm'))$('docCenterIssueForm').addEventListener('submit',submitDocumentCenter);
    if($('docCenterRefresh'))$('docCenterRefresh').addEventListener('click',loadDocumentCenterArchive);
-   if($('documentSettingsForm'))$('documentSettingsForm').addEventListener('submit',saveDocumentSettingsForm);
+   if($('catalogFacility'))$('catalogFacility').addEventListener('change',renderInstitutionalCatalogForFacility);
+  if($('catalogRefresh'))$('catalogRefresh').addEventListener('click',()=>loadInstitutionalServiceCatalog().catch(err=>toast(err.message||'Falha ao actualizar catálogo','error')));
+  if($('saveInstitutionalCatalog'))$('saveInstitutionalCatalog').addEventListener('click',()=>saveInstitutionalServiceCatalog().catch(err=>toast(err.message||'Falha ao guardar catálogo','error')));
+  if($('documentSettingsForm'))$('documentSettingsForm').addEventListener('submit',saveDocumentSettingsForm);
   if($('institutionSettingsForm'))$('institutionSettingsForm').addEventListener('submit',saveInstitutionSettings);
   if($('organizationPreferencesForm'))$('organizationPreferencesForm').addEventListener('submit',saveOrganizationPreferences);
   if($('docLogoFile'))$('docLogoFile').addEventListener('change',e=>previewOrganizationLogo(e).catch(err=>toast(err.message||'Falha na pré-visualização do logótipo','error')));
