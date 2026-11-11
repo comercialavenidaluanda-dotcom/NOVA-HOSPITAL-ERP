@@ -1056,7 +1056,7 @@ async function loadReceptionDocuments(){
  }
  function renderEmergencyQueue(rows){
   const host=$('emergencyQueue'),stats=$('emergencyStats');const pending=rows.filter(x=>x.triage_status==='pending').length,active=rows.filter(x=>x.queue_status==='with_professional').length;
-  stats.innerHTML=stat('Entradas',String(rows.length),'No serviço seleccionado')+stat('Triagem pendente',String(pending),'A aguardar avaliação')+stat('Prioridade imediata','—','Consultar classificação clínica')+stat('Em atendimento',String(active),'Em avaliação clínica');
+  const assessed=rows.filter(x=>x.triage_status==='assessed').length;stats.innerHTML=stat('Entradas',String(rows.length),'No serviço seleccionado')+stat('Triagem pendente',String(pending),'A aguardar avaliação')+stat('Triagem concluída',String(assessed),'Classificação registada')+stat('Em atendimento',String(active),'Em avaliação clínica');
   $('emergencyCount').textContent=rows.length+' entrada(s)';
   if(!rows.length){host.innerHTML='<div class="empty">Não existem entradas de urgência nesta unidade e data. Para registar uma chegada, utilize a recepção.</div>';return}
   host.innerHTML='<div class="table-wrap"><table><thead><tr><th>Chegada</th><th>Paciente</th><th>Queixa / motivo</th><th>Triagem</th><th>Estado</th><th>Acção</th></tr></thead><tbody>'+rows.map(r=>{
