@@ -457,7 +457,13 @@
   if($('invoiceSettingsForm'))$('invoiceSettingsForm').addEventListener('submit',saveDocumentSettingsForm);
   if($('documentTemplateForm'))$('documentTemplateForm').addEventListener('submit',saveDocumentTemplateForm);
   if($('fiscalProfileForm'))$('fiscalProfileForm').addEventListener('submit',saveDocumentSettingsForm);
-  if($('fiscalSeriesForm'))$('fiscalSeriesForm').addEventListener('submit',saveFiscalSeriesForm);\n  if($('documentIssueForm'))$('documentIssueForm').addEventListener('submit',submitDocumentIssue);\n  if($('documentIssueTemplate'))$('documentIssueTemplate').addEventListener('change',syncDocumentFiscalFields);\n  if($('refreshDocumentArchive'))$('refreshDocumentArchive').addEventListener('click',()=>{loadIssuedDocuments().catch(err=>toast(err.message,'error'));loadDocumentAudit().catch(err=>toast(err.message,'error'))});\n  if($('documentPeriod'))$('documentPeriod').addEventListener('change',syncDocumentPeriodInputs);\n  if($('exportDocumentCsv'))$('exportDocumentCsv').addEventListener('click',exportDocumentArchiveCsv);\n  if($('exportDocumentAuditCsv'))$('exportDocumentAuditCsv').addEventListener('click',exportDocumentAuditCsv);
+  if($('fiscalSeriesForm'))$('fiscalSeriesForm').addEventListener('submit',saveFiscalSeriesForm);
+  if($('documentIssueForm'))$('documentIssueForm').addEventListener('submit',submitDocumentIssue);
+  if($('documentIssueTemplate'))$('documentIssueTemplate').addEventListener('change',syncDocumentFiscalFields);
+  if($('refreshDocumentArchive'))$('refreshDocumentArchive').addEventListener('click',()=>{loadIssuedDocuments().catch(err=>toast(err.message,'error'));loadDocumentAudit().catch(err=>toast(err.message,'error'))});
+  if($('documentPeriod'))$('documentPeriod').addEventListener('change',syncDocumentPeriodInputs);
+  if($('exportDocumentCsv'))$('exportDocumentCsv').addEventListener('click',exportDocumentArchiveCsv);
+  if($('exportDocumentAuditCsv'))$('exportDocumentAuditCsv').addEventListener('click',exportDocumentAuditCsv);
   if($('resetDocumentTemplateBtn'))$('resetDocumentTemplateBtn').addEventListener('click',()=>{$('documentTemplateForm').reset();$('documentTemplateFormTitle').textContent='Adicionar / actualizar modelo';$('templateFeedback').textContent='';});
   document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.go)));
   if($('inpatientEnabled')){
@@ -487,7 +493,10 @@
   if($('receptionSearchPatient'))$('receptionSearchPatient').addEventListener('click',searchReceptionPatients);
   if($('receptionPatientSearch'))$('receptionPatientSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchReceptionPatients()}});
   if($('receptionPatientBirth'))$('receptionPatientBirth').addEventListener('change',syncReceptionMinor);
-  if($('receptionTriageForm'))$('receptionTriageForm').addEventListener('submit',submitReceptionTriage);\n  if($('receptionTransferForm'))$('receptionTransferForm').addEventListener('submit',submitReceptionTransfer);\n  if($('cancelReceptionTransfer'))$('cancelReceptionTransfer').addEventListener('click',()=> $('receptionTransferPanel').classList.add('hidden'));\n  if($('closeReceptionHistory'))$('closeReceptionHistory').addEventListener('click',()=> $('receptionHistoryPanel').classList.add('hidden'));
+  if($('receptionTriageForm'))$('receptionTriageForm').addEventListener('submit',submitReceptionTriage);
+  if($('receptionTransferForm'))$('receptionTransferForm').addEventListener('submit',submitReceptionTransfer);
+  if($('cancelReceptionTransfer'))$('cancelReceptionTransfer').addEventListener('click',()=> $('receptionTransferPanel').classList.add('hidden'));
+  if($('closeReceptionHistory'))$('closeReceptionHistory').addEventListener('click',()=> $('receptionHistoryPanel').classList.add('hidden'));
   document.querySelectorAll('[data-open-module]').forEach(el=>el.addEventListener('click',()=>openHospitalModule(el.dataset.openModule)));
  }
  function updateSize(){const n=Number($('employeeCount').value);let label='';if(n>=1&&n<=10)label='Micro instituição · 1–10 colaboradores';else if(n<=50&&n>10)label='Pequena · 11–50 colaboradores';else if(n<=150&&n>50)label='Média · 51–150 colaboradores';else if(n<=500&&n>150)label='Grande · 151–500 colaboradores';else if(n<=1000&&n>500)label='Muito grande · 501–1.000 colaboradores';else if(n>1000)label='Enterprise · 1.001+ colaboradores';$('sizePreview').textContent=label||'Introduza um número válido de colaboradores.'}
