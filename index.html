@@ -575,6 +575,7 @@ ${liveStat('Marcações','dashAppointments','Agenda de Psicologia')}
   if($('clearModuleFilter'))$('clearModuleFilter').addEventListener('click',()=>{activeModuleFilter=null;navigate('modules')});
   if($('orgProfileForm')){$('orgProfileForm').addEventListener('submit',saveOrganizationProfile);$('cancelOrgProfileEdit')?.addEventListener('click',()=>loadOrganizationProfile().catch(()=>{}));loadOrganizationProfile().catch(()=>{});}
    if($('refreshDashboard'))$('refreshDashboard').addEventListener('click',loadDashboardSummary);
+   if($('dashboardPeriod'))$('dashboardPeriod').addEventListener('change',loadDashboardSummary);
    if($('patientSearch'))$('patientSearch').addEventListener('click',searchPatients);
   if($('patientQuery'))$('patientQuery').addEventListener('keydown',e=>{if(e.key==='Enter')searchPatients()});
   if($('patientCreateForm')){$('patientCreateForm').addEventListener('submit',createPatient);$('clearPatientForm').addEventListener('click',()=>{$('patientCreateResult').innerHTML='';$('minorPatientNotice').classList.add('hidden')});$('newPatientBirth').addEventListener('change',syncMinorPatient);}
