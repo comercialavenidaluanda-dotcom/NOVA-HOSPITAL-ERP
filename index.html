@@ -581,7 +581,7 @@ async function loadReceptionDocuments(){
  async function loadInstitutionalServiceCatalog(){
   const host=$('institutionalCatalogList');if(!host)return;host.innerHTML='<div class="empty">A carregar catálogo…</div>';
   const [departments,catalog,selected]=await Promise.all([
-   publicCall('api_get_institution_service_catalog_context',{p_organization_id:org()}),
+   call('core','get_institution_service_catalog_context',{p_organization_id:org()}),
    supabase.schema('hospital').from('service_catalog_reference').select('code,area_code,name,entry_type,description,sort_order').eq('is_active',true).order('sort_order'),
    supabase.schema('hospital').from('organization_service_catalog').select('id,facility_id,catalog_code,enabled,department_id,notes').eq('organization_id',org())
   ]);
