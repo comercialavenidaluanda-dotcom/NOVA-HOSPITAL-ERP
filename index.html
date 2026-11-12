@@ -978,7 +978,7 @@ async function loadReceptionDocuments(){
  }
  async function loadFinanceWorkspace(){
   const host=$('financeCashWorkspace');if(!host)return;
-  try{financeWorkspace=await publicCall('api_finance_workspace',{p_organization_id:org()});renderFinanceWorkspace();await loadAgtWorkspace().catch(err=>{const n=$('agtEngineNotice');if(n)n.textContent=err.message||'Sem acesso à configuração AGT';});}
+  try{financeWorkspace=await publicCall('api_finance_workspace',{p_organization_id:org()});try{const series=await publicCall('api_finance_invoice_series',{p_organization_id:org()});financeWorkspace.fiscal_series=series?.series||[];}catch(_){financeWorkspace.fiscal_series=[];}renderFinanceWorkspace();await loadAgtWorkspace().catch(err=>{const n=$('agtEngineNotice');if(n)n.textContent=err.message||'Sem acesso à configuração AGT';});}
   catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Sem acesso financeiro')+'</div>';throw err;}
 
  let agtWorkspace=null;
@@ -1011,6 +1011,7 @@ async function loadReceptionDocuments(){
  }
  }
  function moneyAOA(v){return Number(v||0).toLocaleString('pt-AO',{minimumFractionDigits:2,maximumFractionDigits:2})+' Kz';}
+ function financeInvoiceStatus(status){const labels={draft:'Rascunho',issued:'Emitida',partially_paid:'Parcialmente paga',paid:'Paga',overdue:'Vencida',cancelled:'Anulada',voided:'Anulada'};return '<span class="status '+(status==='paid'?'success':status==='draft'?'warn':'')+'">'+esc(labels[status]||status)+'</span>';}
  function renderFinanceWorkspace(){
   const w=financeWorkspace||{},sessions=w.open_sessions||[],mine=sessions.find(s=>s.opened_by===currentUser?.id),services=w.services||[];
   const statHost=$('financeStats');if(statHost)statHost.innerHTML=stat('Recebido hoje',moneyAOA(w.today_received),'Pagamentos registados')+stat('Facturas em aberto',moneyAOA(w.open_invoice_total),'Saldo por cobrar')+stat('Caixa activa',mine?'Aberta':'Fechada','Estado do seu turno')+stat('Serviços tarifados',String(services.length),'Serviços activos');
@@ -1020,13 +1021,13 @@ async function loadReceptionDocuments(){
   }
   const fiscal=$('financeFiscalNotice');if(fiscal){fiscal.classList.toggle('hidden',!!w.fiscal_ready);if(w.fiscal_ready){fiscal.textContent='Configuração fiscal validada. A emissão continua sujeita às permissões do utilizador e à série fiscal seleccionada.';}else{const blockers=(w.fiscal_blockers||[]).map(x=>'<li>'+esc(x)+'</li>').join('');fiscal.innerHTML='<b>A facturação fiscal ainda não está habilitada.</b><p>O ERP mantém os rascunhos disponíveis, mas bloqueia a emissão definitiva até todos os requisitos serem confirmados.</p>'+(blockers?'<ul>'+blockers+'</ul>':'')+'<p>Configure os dados oficiais em Definições → Gestão documental. Não introduza dados estimados.</p>';}}
   const serviceOptions='<option value="">Artigo/serviço manual</option>'+services.map(s=>'<option value="'+esc(s.id)+'" data-price="'+esc(s.price||0)+'">'+esc(s.name)+' · '+moneyAOA(s.price)+'</option>').join('');document.querySelectorAll('.financeLineService').forEach(sel=>{const selected=sel.value;sel.innerHTML=serviceOptions;if(selected)sel.value=selected;});
-  const invoices=$('financeInvoiceList');if(invoices){invoices.innerHTML=(w.invoices||[]).length?'<div class="table-wrap"><table><thead><tr><th>Data</th><th>Número</th><th>Adquirente</th><th>Estado</th><th>Total</th><th>Saldo</th><th></th></tr></thead><tbody>'+(w.invoices||[]).map(i=>'<tr><td>'+esc(new Date(i.created_at).toLocaleDateString('pt-AO'))+'</td><td>'+esc(i.number||'Rascunho')+'</td><td>'+esc(i.customer_name||'Paciente')+'</td><td>'+esc(i.status)+'</td><td>'+moneyAOA(i.total)+'</td><td>'+moneyAOA(i.balance)+'</td><td>'+(i.status==='draft'&&w.fiscal_ready?'<button class="btn btn-outline small" type="button" data-finance-issue="'+esc(i.id)+'">Emitir factura</button>':'')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Ainda não existem facturas ou rascunhos.</div>';}
+  const invoices=$('financeInvoiceList');if(invoices){invoices.innerHTML=(w.invoices||[]).length?'<div class="table-wrap"><table><thead><tr><th>Data</th><th>Número</th><th>Adquirente</th><th>Estado</th><th>Total</th><th>Saldo</th><th></th></tr></thead><tbody>'+(w.invoices||[]).map(i=>'<tr><td>'+esc(new Date(i.created_at).toLocaleDateString('pt-AO'))+'</td><td>'+esc(i.number||'Rascunho')+'</td><td>'+esc(i.customer_name||'Paciente')+'</td><td>'+financeInvoiceStatus(i.status)+'</td><td>'+moneyAOA(i.total)+'</td><td>'+moneyAOA(i.balance)+'</td><td>'+(i.status==='draft'&&w.fiscal_ready&&(w.fiscal_series||[]).length?'<div class="toolbar"><select class="small" data-finance-series="'+esc(i.id)+'">'+(w.fiscal_series||[]).map(s=>'<option value="'+esc(s.code)+'">'+esc(s.code)+' · '+esc(s.fiscal_year)+'</option>').join('')+'</select><button class="btn btn-outline small" type="button" data-finance-issue="'+esc(i.id)+'">Emitir</button></div>':'')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Ainda não existem facturas ou rascunhos.</div>';}
   const pays=$('financePaymentsList');if(pays){pays.innerHTML=(w.recent_payments||[]).length?'<div class="table-wrap"><table><thead><tr><th>Data</th><th>Meio</th><th>Referência</th><th>Valor</th></tr></thead><tbody>'+(w.recent_payments||[]).map(p=>'<tr><td>'+esc(new Date(p.received_at).toLocaleString('pt-AO'))+'</td><td>'+esc(p.method)+'</td><td>'+esc(p.reference||'—')+'</td><td>'+moneyAOA(p.amount)+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Sem recebimentos registados.</div>';}
   if($('financeOpenCash'))$('financeOpenCash').addEventListener('click',openFinanceCash);
   if($('financeReceivePayment'))$('financeReceivePayment').addEventListener('click',receiveFinancePayment);
   if($('financeCashOut'))$('financeCashOut').addEventListener('click',recordFinanceCashOut);
   document.querySelectorAll('[data-finance-close]').forEach(b=>b.addEventListener('click',()=>closeFinanceCash(b.dataset.financeClose)));
-  document.querySelectorAll('[data-finance-issue]').forEach(b=>b.addEventListener('click',()=>issueFinanceInvoice(b.dataset.financeIssue)));
+  document.querySelectorAll('[data-finance-issue]').forEach(b=>b.addEventListener('click',()=>{const sel=document.querySelector('[data-finance-series="'+b.dataset.financeIssue+'"]');issueFinanceInvoice(b.dataset.financeIssue,sel?.value||'');}));
  }
  async function searchFinancePatient(){
   const q=$('financePatientSearch').value.trim(),host=$('financePatientResults');if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return;}
@@ -1114,9 +1115,10 @@ async function loadReceptionDocuments(){
   }catch(err){const msg=financeInvoiceError(err.message);if(feedback)feedback.textContent=msg;toast(msg,'error');}
   finally{if(button)button.disabled=false;}
  }
- async function issueFinanceInvoice(invoiceId){
-  if(!financeWorkspace?.fiscal_ready){toast('Configure primeiro a série fiscal da factura.','error');return}
-  const code=prompt('Código da série fiscal FACTURA configurada:');if(!code)return;
+ async function issueFinanceInvoice(invoiceId,code){
+  if(!financeWorkspace?.fiscal_ready){toast('A emissão está bloqueada: complete o perfil fiscal, o modelo FACTURA e a série comunicada à AGT.','error');return}
+  if(!code){toast('Seleccione uma série fiscal activa.','error');return}
+  if(!confirm('Emitir definitivamente esta factura usando a série '+code+'? Esta operação atribui número fiscal e não deve ser repetida.'))return;
   try{const result=await publicCall('api_finance_finalize_invoice',{p_organization_id:org(),p_invoice_id:invoiceId,p_fiscal_series_code:code});toast('Factura emitida: '+result.document.document_number);await printIssuedDocument(result.document);await loadFinanceWorkspace();}
   catch(err){toast(err.message||'Não foi possível emitir a factura.','error')}
  }
