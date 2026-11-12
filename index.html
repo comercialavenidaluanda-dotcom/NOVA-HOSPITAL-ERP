@@ -1032,6 +1032,7 @@ async function loadReceptionDocuments(){
   if($('financeCashOut'))$('financeCashOut').addEventListener('click',recordFinanceCashOut);
   document.querySelectorAll('[data-finance-close]').forEach(b=>b.addEventListener('click',()=>closeFinanceCash(b.dataset.financeClose)));
   document.querySelectorAll('[data-finance-issue]').forEach(b=>b.addEventListener('click',()=>{const sel=document.querySelector('[data-finance-series="'+b.dataset.financeIssue+'"]');issueFinanceInvoice(b.dataset.financeIssue,sel?.value||'');}));
+  bindFinanceInvoiceForm();
  }
  async function searchFinancePatient(){
   const q=$('financePatientSearch').value.trim(),host=$('financePatientResults');if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return;}
@@ -1072,6 +1073,28 @@ async function loadReceptionDocuments(){
   const notes=prompt('Observações do fecho (opcional):')||null;
   try{const result=await publicCall('api_finance_close_cash',{p_organization_id:org(),p_cash_session_id:sessionId,p_counted_amount:amount,p_notes:notes});toast('Caixa fechada. Diferença: '+moneyAOA(result.difference));await loadFinanceWorkspace();}
   catch(err){toast(err.message||'Falha ao fechar caixa.','error')}
+ }
+ function bindFinanceInvoiceForm(){
+  const form=$('financeInvoiceForm');
+  if(form&&!form.dataset.financeBound){form.dataset.financeBound='1';form.addEventListener('submit',createFinanceInvoice);}
+  const preview=$('financePreviewInvoice');
+  if(preview&&!preview.dataset.financeBound){preview.dataset.financeBound='1';preview.addEventListener('click',previewFinanceInvoice);}
+  const searchPatient=$('financeSearchPatient');
+  if(searchPatient&&!searchPatient.dataset.financeBound){searchPatient.dataset.financeBound='1';searchPatient.addEventListener('click',searchFinancePatient);}
+  const searchCustomer=$('financeSearchCustomer');
+  if(searchCustomer&&!searchCustomer.dataset.financeBound){searchCustomer.dataset.financeBound='1';searchCustomer.addEventListener('click',searchFinanceCustomer);}
+  const refresh=$('financeRefresh');
+  if(refresh&&!refresh.dataset.financeBound){refresh.dataset.financeBound='1';refresh.addEventListener('click',loadFinanceWorkspace);}
+  const lines=$('financeInvoiceLines');
+  if(lines&&!lines.dataset.financeBound){
+   lines.dataset.financeBound='1';
+   lines.addEventListener('change',e=>{if(e.target.matches('.financeLineService')){renderFinanceInvoiceLineTax(e.target.closest('.finance-invoice-line'));updateFinanceInvoicePreview();}});
+   lines.addEventListener('input',e=>{if(e.target.matches('.financeLineQuantity,.financeLinePrice,.financeLineDiscount,.financeLineDescription'))updateFinanceInvoicePreview();});
+   lines.addEventListener('click',e=>{const remove=e.target.closest('[data-finance-remove-line]');if(remove){remove.closest('.finance-invoice-line')?.remove();updateFinanceInvoicePreview();}});
+  }
+  const add=$('financeAddInvoiceLine');
+  if(add&&!add.dataset.financeBound){add.dataset.financeBound='1';add.addEventListener('click',addFinanceInvoiceLine);}
+  updateFinanceInvoicePreview();
  }
  function addFinanceInvoiceLine(){
   const host=$('financeInvoiceLines');if(!host)return;
