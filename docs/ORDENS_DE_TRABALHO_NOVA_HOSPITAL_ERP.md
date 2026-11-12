@@ -18,7 +18,7 @@
 5. Não marcar integração, certificação, assinatura, comunicação AGT ou homologação oficial como concluída sem evidência real.
 6. Nenhum preço simulado constitui tabela comercial ou tarifário aprovado.
 
-## OT-001 — Fundação institucional, emissor de teste e catálogo hospitalar
+## Registo Hospitalar do Paciente (NRH) — transversal\n\n**Estado:** Implementado na base de dados e interface; validação transaccional da API concluída.\n\n- Todo o novo registo em `patient.records`, independentemente do módulo de origem, recebe um NRH automático no formato `NRH-AAAA-000001`, sequencial por instituição e ano.\n- A geração é transaccional e centralizada num trigger da base de dados; não depende do browser nem do módulo que criou o paciente.\n- O NRH é imutável após a criação. O identificador técnico `medical_id` permanece separado e não deve ser apresentado como número de processo hospitalar.\n- O número é devolvido pelos fluxos de cadastro central e recepção sem marcação, e apresentado nos ecrãs de cadastro, pesquisa, recepção, internamento e diagnóstico.\n- Os registos históricos mantêm os números existentes; não foram renumerados para evitar quebrar documentos e referências já emitidos.\n- Teste transaccional confirmou o formato e a devolução do NRH pela API; a transacção foi revertida, sem paciente de teste persistido.\n\n## OT-001 — Fundação institucional, emissor de teste e catálogo hospitalar
 
 **Estado:** EM EXECUÇÃO — base de dados e dados de demonstração preparados; validação ponta-a-ponta pendente.  
 **Prioridade:** Crítica.
