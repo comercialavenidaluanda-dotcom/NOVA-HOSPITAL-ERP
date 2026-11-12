@@ -903,7 +903,8 @@ async function loadReceptionDocuments(){
   '<section class="panel"><h2>Períodos e diários</h2><div class="two-col"><div id="accountingPeriods"></div><div id="accountingJournals"></div></div></section>'+
   '<section class="panel"><h2>Novo lançamento contabilístico</h2><p class="muted small">Cada lançamento deve estar equilibrado: total a débito igual ao total a crédito. Os lançamentos contabilizados não podem ser editados directamente.</p><form id="accountingEntryForm"><div class="form-grid"><div class="field"><label>PERÍODO</label><select id="accEntryPeriod" required><option value="">Seleccione</option></select></div><div class="field"><label>DIÁRIO</label><select id="accEntryJournal" required><option value="">Seleccione</option></select></div><div class="field"><label>DATA</label><input id="accEntryDate" type="date" required></div><div class="field"><label>DESCRIÇÃO</label><input id="accEntryDescription" maxlength="240" required></div></div><div id="accountingEntryLines"></div><div class="toolbar"><button class="btn btn-outline" type="button" id="accountingAddLine">Adicionar linha</button><button class="btn btn-primary" type="submit">Guardar lançamento em rascunho</button></div><div id="accountingEntryFeedback" class="small muted"></div></form></section>'+
   '<section class="panel"><h2>Balancete de verificação</h2><p class="muted small">Apresenta apenas movimentos contabilizados.</p><div id="accountingTrialBalance"><div class="empty">A carregar balancete…</div></div></section>'+
-  '<section class="panel"><h2>Diário de lançamentos</h2><div id="accountingEntries"><div class="empty">A carregar lançamentos…</div></div></section>';
+  '<section class="panel"><h2>Diário de lançamentos</h2><div id="accountingEntries"><div class="empty">A carregar lançamentos…</div></div></section>'+
+  '<section class="panel"><div class="panel-head"><div><h2>Preparação SAF-T AO · Contabilidade</h2><p class="muted small">Validação prévia dos registos contabilísticos e dados institucionais antes de qualquer exportação.</p></div><span class="status warn">Pré-validação</span></div><div class="form-grid"><div class="field"><label>DATA INICIAL</label><input id="saftAccStart" type="date" value="2026-01-01" required></div><div class="field"><label>DATA FINAL</label><input id="saftAccEnd" type="date" value="2026-12-31" required></div></div><div class="toolbar"><button class="btn btn-primary" type="button" id="saftAccPreflightBtn">Executar pré-validação SAF-T</button><span class="small muted">Não gera ficheiro nem comunica com a AGT.</span></div><div id="saftAccPreflightResult" class="notice" aria-live="polite">Seleccione o período e execute a pré-validação para identificar dados em falta.</div></section>';
  }
  async function loadAccountingWorkspace(){
   const host=$('accountingAccounts');if(!host)return;
@@ -933,6 +934,25 @@ async function loadReceptionDocuments(){
   document.querySelectorAll('[data-accounting-edit]').forEach(b=>b.addEventListener('click',()=>editAccountingAccount(b.dataset.accountingEdit)));
   document.querySelectorAll('[data-accounting-child]').forEach(b=>b.addEventListener('click',()=>createAccountingSubaccount(b.dataset.accountingChild)));
   document.querySelectorAll('[data-accounting-disable]').forEach(b=>b.addEventListener('click',()=>disableAccountingAccount(b.dataset.accountingDisable)));
+  const saftBtn=$('saftAccPreflightBtn');if(saftBtn)saftBtn.addEventListener('click',runAccountingSaftPreflight);
+ }
+ async function runAccountingSaftPreflight(){
+  const btn=$('saftAccPreflightBtn'),host=$('saftAccPreflightResult');
+  if(!btn||!host)return;
+  const start=$('saftAccStart').value,end=$('saftAccEnd').value;
+  if(!start||!end||start>end){host.className='notice error';host.textContent='Indique um intervalo de datas válido.';return;}
+  btn.disabled=true;host.className='notice';host.textContent='A validar plano de contas, períodos, diários, lançamentos e identificação fiscal…';
+  try{
+   const r=await publicCall('api_saft_accounting_preflight',{p_organization_id:org(),p_start_date:start,p_end_date:end});
+   const c=r.checks||{},blockers=r.blockers||[],warnings=r.warnings||[];
+   const metrics=[['Contas activas',c.accounts_active],['Lançamentos contabilizados',c.posted_entries],['Rascunhos',c.draft_entries],['Períodos encontrados',c.periods_covering_range],['Diários activos',c.active_journals],['Lançamentos desequilibrados',c.unbalanced_entries]];
+   host.className=r.export_ready?'notice':'notice warn';
+   host.innerHTML='<b>'+ (r.export_ready?'Pré-validação contabilística sem bloqueios detectados':'Pré-validação concluída · existem pontos por corrigir') +'</b><div class="form-grid" style="margin-top:10px">'+metrics.map(([label,value])=>'<div><span class="small muted">'+esc(label)+'</span><br><b>'+esc(value??0)+'</b></div>').join('')+'</div>'+
+    (blockers.length?'<h4>Bloqueios</h4><ul>'+blockers.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+
+    (warnings.length?'<h4>Atenções</h4><ul>'+warnings.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+
+    '<p class="small">'+esc(r.message||'Pré-validação concluída.')+'</p>';
+  }catch(err){host.className='notice error';host.textContent=err.message||'Não foi possível executar a pré-validação SAF-T.';toast(err.message||'Falha na pré-validação SAF-T.','error');}
+  finally{btn.disabled=false;}
  }
  async function saveAccountingAccount(e){e.preventDefault();const btn=$('accSaveButton'),fb=$('accAccountFeedback');if(btn)btn.disabled=true;try{const id=$('accId').value||null;await publicCall('api_accounting_save_account',{p_organization_id:org(),p_data:{id,code:$('accCode').value.trim(),name:$('accName').value.trim(),class:Number($('accClass').value),normal_balance:$('accNature').value,parent_id:$('accParent').value||null,postable:$('accPostable').value==='true',active:true}});if(fb)fb.textContent=id?'Conta actualizada.':'Conta criada.';toast(id?'Conta contabilística actualizada.':'Conta contabilística criada.');resetAccountingAccountForm();await loadAccountingWorkspace();}catch(err){if(fb)fb.textContent=err.message||'Não foi possível guardar a conta.';toast(err.message||'Não foi possível guardar a conta.','error');}finally{if(btn)btn.disabled=false;}}
  async function saveAccountingPeriod(e){e.preventDefault();try{await publicCall('api_accounting_save_period',{p_organization_id:org(),p_data:{name:$('accPeriodName').value.trim(),starts_on:$('accPeriodStart').value,ends_on:$('accPeriodEnd').value}});$('accountingPeriodForm').reset();toast('Período contabilístico criado.');await loadAccountingWorkspace();}catch(err){toast(err.message||'Não foi possível criar o período.','error');}}
