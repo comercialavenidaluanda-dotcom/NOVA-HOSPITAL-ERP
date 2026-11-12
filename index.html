@@ -1170,13 +1170,14 @@ async function loadReceptionDocuments(){
    if(request!==financeQuoteRequest)return;
    $('financeInvoiceSubtotal').textContent=moneyAOA(quote.subtotal);
    $('financeInvoiceDiscount').textContent=moneyAOA(quote.discount_total);
-   const taxLabel=(quote.tax_summary||[]).map(t=>String(t.tax_code||'IVA')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').join(' · ');\n   $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
+   const taxLabel=(quote.tax_summary||[]).map(t=>String(t.tax_code||'IVA')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').join(' · ');
+   $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
    $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
    if(status)status.textContent='Cálculo do servidor · sem numeração fiscal · valores sujeitos a nova validação na emissão.';
   }catch(err){
    if(request!==financeQuoteRequest)return;
    if(status)status.textContent=financeInvoiceError(err.message);
-   $('financeInvoiceTax').textContent='—';$('financeInvoiceTotal').textContent='—';
+   ['financeInvoiceSubtotal','financeInvoiceDiscount','financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
   }
  }
  function financeInvoiceError(message){
