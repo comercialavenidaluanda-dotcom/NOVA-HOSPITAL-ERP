@@ -79,7 +79,7 @@
 
 ## OT-003 — Laboratório LIS e Imagiologia RIS/PACS
 
-**Estado:** PLANEADA.  
+**Estado:** EM EXECUÇÃO — base de dados LIS/RIS preparada; interface operacional, regras de validação clínica e testes ponta-a-ponta pendentes.  
 **Prioridade:** Alta.
 
 ### Âmbito
@@ -87,12 +87,24 @@
 - Resultados estruturados, intervalos de referência e valores críticos.
 - Agenda de exames, execução, laudo e anexação de imagens.
 - Histórico de alterações e validação por profissional autorizado.
+- Rastreio de amostras por código, estado, recolha, recepção e rejeição.
+- Registo de estudos de imagem, modalidade, região anatómica, accession number, relatório e referência segura ao armazenamento DICOM.
 
-### Critérios de aceitação
-- Resultado não pode ser validado pelo mesmo fluxo sem identidade e permissão apropriadas.
-- Resultados críticos geram alerta rastreável.
-- Exames e laudos ficam ligados ao paciente e episódio correctos.
-- Integrações externas ficam identificadas como pendentes até existirem interfaces reais.
+### Implementado nesta fase
+- Criada `clinical.diagnostic_specimens` para rastreio de amostras laboratoriais, com código único por instituição, tipo, recolha, recepção, rejeição e localização.
+- Criada `clinical.imaging_studies` para estudos RIS, modalidade, accession number, execução, relatório, validação e metadados DICOM.
+- Chaves estrangeiras compostas mantêm os registos ligados à mesma organização e ao pedido diagnóstico original.
+- RLS activada nas duas tabelas, com leitura e gestão condicionadas às permissões e ao âmbito de unidade/departamento.
+- Triggers impedem associar amostras a pedidos de imagiologia e estudos de imagem a pedidos laboratoriais.
+- Índices de fila e de relações principais adicionados.
+
+### Critérios de aceitação / pendentes
+- Interface para criar e acompanhar amostras, estudos e relatórios.
+- Fluxo de estados transaccionais com histórico imutável de eventos.
+- Validação final apenas por profissional activo e habilitado, no departamento correspondente.
+- Alertas de valores críticos e controlo de prazos TAT.
+- Testes funcionais e de permissões com perfis reais de laboratório e radiologia.
+- Integrações externas LIS, analisadores, PACS/DICOMweb e modalidades continuam pendentes; nenhum equipamento foi declarado ligado.
 
 ## OT-004 — Farmácia e aprovisionamento
 
@@ -191,5 +203,5 @@
 | 2026-11-12 | OT-001 | Emissor IVATAXI de teste e lote de dados registados | Supabase migration + lote TEST-NOVA-ERP-2026-001 |
 | 2026-11-12 | OT-001 | Catálogo, camas, diagnóstico e episódios simulados | 42 IDs registados em audit.test_data_registry |
 | 2026-11-12 | OT-001 | Pré-visualização de limpeza criada, sem eliminação | audit.preview_test_data_cleanup(uuid) |
-| 2026-11-12 | OT-002 | Entrada de urgência sem marcação corrigida e testada; fila mostra triagem pendente | reception_visits + api_get_reception_queue; profissional habilitado pendente |
+| 2026-11-12 | OT-002 | Entrada de urgência sem marcação corrigida e testada; fila mostra triagem pendente | reception_visits + api_get_reception_queue; profissional habilitado pendente |\n| 2026-11-12 | OT-003 | Estruturas LIS de amostras e RIS de estudos de imagem criadas com RLS, escopo institucional e índices | migrations `ot003_lis_specimen_and_ris_imaging_workflow` e `ot003_split_diagnostic_permissions_and_fk_indexes`; verificação RLS/triggers concluída |
 
