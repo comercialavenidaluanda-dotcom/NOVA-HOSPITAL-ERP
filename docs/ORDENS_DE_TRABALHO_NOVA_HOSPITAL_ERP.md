@@ -108,7 +108,7 @@
 
 ## OT-004 — Farmácia e aprovisionamento
 
-**Estado:** PLANEADA.  
+**Estado:** EM EXECUÇÃO — base de dados, APIs seguras e primeira interface operacional implementadas; validação funcional com perfil farmacêutico e circuito de compras pendentes.  
 **Prioridade:** Alta.
 
 ### Âmbito
@@ -118,10 +118,31 @@
 - Alertas de ruptura, validade e stock mínimo.
 - Ligação a custos, facturação e contabilidade.
 
-### Critérios de aceitação
-- Rastreabilidade por lote e validade.
-- Não permitir dispensa acima do stock disponível.
-- Movimentos de stock auditáveis e reversões controladas.
+### Implementado nesta fase
+- Criado o schema pharmacy com catálogo de medicamentos, fornecedores, locais de armazenamento, lotes, prescrições e linhas, dispensas e linhas, movimentos de stock, encomendas e artigos de encomenda.
+- RLS activada nas tabelas; permissões específicas para leitura, catálogo, stock, prescrição, dispensa e aprovisionamento.
+- APIs de aplicação com autorização e validação; funções transaccionais de entrada de stock e dispensa mantidas no schema operacional.
+- Recepção de lote rejeita validade expirada, cria o saldo e o movimento de entrada na mesma transacção.
+- Dispensa bloqueia lote expirado/inactivo, quantidade superior ao saldo e quantidade superior ao remanescente prescrito; actualiza lote, dispensa e livro de movimentos atomicamente.
+- Interface do módulo Farmácia: catálogo de medicamentos, fornecedores, locais, encomendas em rascunho, recepção de lotes, dispensa a partir de prescrição activa e consulta de saldos/validade.
+- Encomendas criadas em transacção com cabeçalho e artigo; escrita directa nas tabelas de encomenda bloqueada ao cliente.
+- Índices de FEFO, histórico de movimentos, prescrições e encomendas; índices de relações e políticas RLS afinados.
+
+### Testes realizados
+- Teste autenticado, em transacção revertida, criou medicamento e fornecedor temporários, local de farmácia, recebeu lote e efectuou dispensa; o saldo diminuiu de 7 para 5 e foram criados dois movimentos de stock.
+- Teste autenticado de criação de encomenda confirmou cabeçalho em rascunho e linha de artigo.
+- Todos os testes foram revertidos; nenhum medicamento, fornecedor, lote, dispensa ou encomenda de teste ficou persistido.
+- Não foram inventados preços comerciais, fornecedores reais ou movimentos reais de stock.
+
+### Pendências / critérios de aceitação finais
+- Validar o circuito com conta farmacêutica activa e perfil profissional/cédula confirmados.
+- Criar prescrição a partir do acto clínico, com autoria do prescritor e revisão farmacêutica.
+- Aprovação de encomenda, recepção parcial/total contra encomenda e reconciliação de quantidades.
+- Inventários físicos, ajustes com dupla validação, devoluções, reversões e transferências entre locais.
+- Controlo de medicamentos sujeitos a receita especial/controlo legal, registo próprio e segregação de funções.
+- Alertas de stock mínimo, validade próxima, recolhas/recalls e cadeia de frio.
+- Integração de custo de aquisição, facturação e contabilidade sem duplicar movimentos.
+- Testes de permissões com contas farmacêuticas e clínicas reais; nenhuma integração externa foi declarada ligada.
 
 ## OT-005 — Enfermagem, internamento, cirurgia e maternidade
 
@@ -197,6 +218,7 @@
 - Homologação interna e homologação AGT identificadas como estados distintos.
 
 ## Registo de execução
+| 2026-11-12 | OT-004 | Fundação da farmácia e aprovisionamento: catálogo, fornecedores, locais, lotes, prescrições, dispensas, movimentos e encomendas; APIs e interface inicial | migrations OT004 de estrutura, integridade, recepção/dispensa transaccional, API segura, encomendas e ajustes RLS/índices; testes autenticados revertidos aprovados |
 
 | Data | OT | Alteração | Evidência |
 |---|---|---|---|
