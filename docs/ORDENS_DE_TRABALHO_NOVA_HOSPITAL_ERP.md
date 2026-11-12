@@ -50,7 +50,7 @@
 
 ## OT-002 — Urgência e emergência
 
-**Estado:** PLANEADA.  
+**Estado:** EM EXECUÇÃO — entrada de urgência e fila testadas; triagem clínica aguarda profissional habilitado activo.  
 **Prioridade:** Crítica.
 
 ### Âmbito
@@ -66,6 +66,16 @@
 - Alertas para prioridades críticas e atrasos.
 - Encaminhamento para internamento sem duplicar o paciente nem o episódio.
 - Testes com pacientes exclusivamente fictícios.
+
+### Implementado / validado
+- Corrigida a estrutura de recepção para permitir entradas sem marcação, mantendo a ligação à marcação opcional.
+- Reforçadas permissões de leitura/gestão da fila para o proprietário institucional e permissão de triagem para o perfil de médico.
+- Entrada de urgência simulada criada e visível na fila, com estado de triagem pendente.
+- A fila confirma `can_assess_triage=false` para utilizador sem perfil clínico habilitado; o sistema não permite abrir episódio de emergência sem triagem.
+
+### Bloqueio para aceitação
+- Associar um utilizador real de teste a perfil de enfermeiro ou médico activo, com departamento e unidade correctos. Não foi criado um profissional fictício com identidade de outro utilizador.
+- Depois, testar classificação de risco, sinais vitais, abertura do episódio e transições até alta/transferência.
 
 ## OT-003 — Laboratório LIS e Imagiologia RIS/PACS
 
@@ -181,4 +191,5 @@
 | 2026-11-12 | OT-001 | Emissor IVATAXI de teste e lote de dados registados | Supabase migration + lote TEST-NOVA-ERP-2026-001 |
 | 2026-11-12 | OT-001 | Catálogo, camas, diagnóstico e episódios simulados | 42 IDs registados em audit.test_data_registry |
 | 2026-11-12 | OT-001 | Pré-visualização de limpeza criada, sem eliminação | audit.preview_test_data_cleanup(uuid) |
+| 2026-11-12 | OT-002 | Entrada de urgência sem marcação corrigida e testada; fila mostra triagem pendente | reception_visits + api_get_reception_queue; profissional habilitado pendente |
 
