@@ -817,7 +817,7 @@ async function loadReceptionDocuments(){
  async function printIssuedDocument(d){
   const snap=d.content_snapshot||{},content=snap.content||{},inst=snap.institution||{},title=content.document_title||snap.document_name||d.document_code;
   let logoUrl=inst.logo_url||'';if(logoUrl&&!/^https?:\/\//i.test(logoUrl)){const signed=await supabase.storage.from('organization-assets').createSignedUrl(logoUrl,300);logoUrl=signed.data?.signedUrl||'';}
-  const fieldDefs=snap.template_config?.fields||[],formFields=content.form_fields||{};const fieldRows=Object.entries(formFields).map(([key,value])=>[fieldDefs.find(x=>x.key===key)?.label||key,String(value??'')]);const professional=content.responsible_professional||{};const invoiceRows=(content.items||[]).flatMap((item,n)=>[['Artigo / serviço '+(n+1),item.description],['Quantidade',item.quantity],['Preço unitário',moneyAOA(item.unit_price)],['Desconto',moneyAOA(item.discount)],['IVA',String(item.tax_rate)+'% · '+moneyAOA(item.tax)],['Total da linha',moneyAOA(item.total)]]);
+  const fieldDefs=snap.template_config?.fields||[],formFields=content.form_fields||{};const fieldRows=Object.entries(formFields).map(([key,value])=>[fieldDefs.find(x=>x.key===key)?.label||key,String(value??'')]);const professional=content.responsible_professional||{};const invoiceRows=(content.items||[]).flatMap((item,n)=>[['Artigo / serviço '+(n+1),item.description],['Quantidade',item.quantity],['Preço unitário',moneyAOA(item.unit_price)],['Desconto',moneyAOA(item.discount)],['Enquadramento fiscal',String(item.tax_code||'IVA')+' · '+String(item.tax_rate)+'%'+(item.tax_exemption_code?' · Isenção '+item.tax_exemption_code:'')],['IVA',moneyAOA(item.tax)],['Motivo / base legal',item.tax_exemption_reason||item.tax_legal_reference||''],['Total da linha',moneyAOA(item.total)]]);
   const rows=[['Número',d.document_number],['Data de emissão',d.issued_at||snap.issued_at],['Instituição',inst.legal_name||inst.header_title||''],['NIF da instituição',inst.tax_identifier||''],['Adquirente',content.customer_name||''],['NIF do adquirente',content.customer_nif||''],['Paciente',content.patient_name||content.patient?.patient_name||d.patient_id||''],['Número do paciente',content.patient_number||content.patient?.patient_number||''],['Profissional responsável',professional.professional_name||content.professional_name||''],['Código profissional',professional.professional_code||''],['Cédula / licença',professional.license_number||''],['Origem',content.from_department||''],['Destino',content.to_department||''],['Motivo',content.transfer_reason||''],['Descrição',content.description||''],...invoiceRows,['Subtotal',content.subtotal!==undefined?moneyAOA(content.subtotal):''],['Impostos',content.tax_total!==undefined?moneyAOA(content.tax_total):''],['TOTAL A PAGAR',content.total_amount!==undefined?moneyAOA(content.total_amount):''],...fieldRows,['Observações',content.notes||'']];
   const w=window.open('','_blank');if(!w){toast('Permita janelas de impressão para abrir o documento.','error');return}
   w.document.write('<!doctype html><html lang="pt"><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font:14px Arial,sans-serif;color:#17283b;margin:32px}header{border-bottom:2px solid #17334f;padding-bottom:14px;margin-bottom:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #ddd;vertical-align:top}td:first-child{width:190px;font-weight:bold;color:#526579}.foot{margin-top:40px;border-top:1px solid #ddd;padding-top:20px;color:#64748b}@media print{button{display:none}}</style><header>'+(logoUrl?'<img src="'+esc(logoUrl)+'" style="max-width:170px;max-height:85px;object-fit:contain;margin-bottom:10px">':'')+'<h1>'+esc(inst.header_title||inst.legal_name||'NOVA HOSPITAL ERP')+'</h1><div>'+esc(inst.address_text||'')+'</div><div>'+esc(inst.contact_phone||'')+' · '+esc(inst.contact_email||'')+'</div></header><h2>'+esc(title)+'</h2><table>'+rows.filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='').map(x=>'<tr><td>'+esc(x[0])+'</td><td>'+esc(x[1])+'</td></tr>').join('')+'</table><div class="foot">'+esc(inst.footer_text||'Documento gerado pelo NOVA HOSPITAL ERP')+'</div></html>');w.document.close();w.focus();w.print();
@@ -1129,14 +1129,14 @@ async function loadReceptionDocuments(){
   }
  }
  function updateFinanceInvoicePreview(){
-  const host=$('financeInvoiceLines');if(!host)return;let subtotal=0;
+  const host=$('financeInvoiceLines');if(!host)return;
   host.querySelectorAll('.finance-invoice-line').forEach(row=>{
-   const service=row.querySelector('.financeLineService'),price=row.querySelector('.financeLinePrice'),qty=Number(row.querySelector('.financeLineQuantity')?.value||0),discount=Number(row.querySelector('.financeLineDiscount')?.value||0);
+   const service=row.querySelector('.financeLineService'),price=row.querySelector('.financeLinePrice');
    const unit=service?.value?Number(service.selectedOptions[0]?.dataset.price||0):Number(price?.value||0);
    if(price){price.readOnly=!!service?.value;if(service?.value)price.value=unit.toFixed(2);}
-   if(qty>0&&unit>=0&&discount>=0)subtotal+=Math.max(0,qty*unit-discount);
   });
-  const out=$('financeInvoiceSubtotal');if(out)out.textContent=moneyAOA(subtotal);
+  const out=$('financeInvoiceSubtotal');if(out)out.textContent='A calcular no servidor…';
+  ['financeInvoiceDiscount','financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
   scheduleFinanceInvoiceQuote();
  }
  function scheduleFinanceInvoiceQuote(){
@@ -1160,7 +1160,7 @@ async function loadReceptionDocuments(){
   });
   if(!items.length||incomplete){
    if(status)status.textContent='Preencha descrição, quantidade e preço dos artigos manuais para calcular.';
-   ['financeInvoiceDiscount','financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
+   ['financeInvoiceSubtotal','financeInvoiceDiscount','financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
    return;
   }
   const request=++financeQuoteRequest;
@@ -1170,7 +1170,7 @@ async function loadReceptionDocuments(){
    if(request!==financeQuoteRequest)return;
    $('financeInvoiceSubtotal').textContent=moneyAOA(quote.subtotal);
    $('financeInvoiceDiscount').textContent=moneyAOA(quote.discount_total);
-   $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+' ('+Number(quote.tax_rate||0).toLocaleString('pt-AO')+'%)';
+   const taxLabel=(quote.tax_summary||[]).map(t=>String(t.tax_code||'IVA')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').join(' · ');\n   $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
    $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
    if(status)status.textContent='Cálculo do servidor · sem numeração fiscal · valores sujeitos a nova validação na emissão.';
   }catch(err){
@@ -1188,7 +1188,7 @@ async function loadReceptionDocuments(){
    INVOICE_CUSTOMER_NAME_REQUIRED:'Indique o nome do adquirente ou seleccione um paciente.',
    INVOICE_ITEM_DESCRIPTION_REQUIRED:'Preencha a descrição do artigo manual.',
    INVALID_INVOICE_ITEM_VALUES:'Verifique quantidades, preços e descontos. O desconto não pode exceder o valor da linha.'
-  };return map[message]||message||'Não foi possível guardar a factura.';
+  };if(String(message||'').startsWith('SERVICE_TAX_CLASSIFICATION_REQUIRED'))return 'O serviço seleccionado não tem classificação fiscal validada. Configure o código AGT, a taxa ou a isenção e a respectiva base legal no catálogo de serviços.';if(String(message||'').startsWith('VAT_EXEMPTION_DATA_INCOMPLETE'))return 'A isenção do serviço está incompleta. Confirme o código de isenção, o motivo e a norma legal no catálogo.';return map[message]||message||'Não foi possível guardar a factura.';
  }
  async function previewFinanceInvoice(){
   try{
@@ -1205,7 +1205,7 @@ async function loadReceptionDocuments(){
    });
    const quote=await publicCall('api_finance_calculate_invoice_quote',{p_organization_id:org(),p_items:items});
    const customer=$('financeCustomerName').value.trim()||financePatient?.name||'Adquirente por identificar';
-   const contentItems=(quote.lines||[]).map(line=>({description:line.description,quantity:line.quantity,unit_price:line.unit_price,discount:line.discount_amount||0,tax_rate:line.tax_rate||0,tax:line.tax||0,total:line.total}));
+   const contentItems=(quote.lines||[]).map(line=>({description:line.description,quantity:line.quantity,unit_price:line.unit_price,discount:line.discount_amount||0,tax_type:line.tax_type,tax_code:line.tax_code,tax_rate:line.tax_rate||0,tax_exemption_code:line.tax_exemption_code,tax_exemption_reason:line.tax_exemption_reason,tax_legal_reference:line.tax_legal_reference,tax:line.tax||0,total:line.total}));
    const now=new Date().toISOString();
    const d={document_code:'FACTURA',document_number:'PRÉ-VISUALIZAÇÃO — NÃO EMITIDA',issued_at:now,content_snapshot:{document_name:'Pré-visualização de factura',issued_at:now,institution:{header_title:'NOVA CLÍNICA',footer_text:'PRÉ-VISUALIZAÇÃO — documento não emitido e sem valor fiscal'},content:{customer_name:customer,customer_nif:$('financeCustomerNif').value.trim(),patient_name:financePatient?.name||null,currency:'AOA',subtotal:quote.subtotal,discount_total:quote.discount_total,tax_total:quote.tax_total,total_amount:quote.total,items:contentItems,notes:$('financeInvoiceNotes').value.trim(),calculation_source:'server_quote_only'}}};
    await printIssuedDocument(d);
