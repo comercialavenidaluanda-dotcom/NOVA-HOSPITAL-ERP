@@ -244,7 +244,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
    const message=err?.message||'Falha na autenticação. Verifique os dados e tente novamente.';
    if(feedback){feedback.textContent='Não foi possível iniciar sessão: '+message;feedback.classList.remove('hidden');feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast(message,'error');
    $('email').value=email;
-   $('password').value=password;
+   $('password').value='';
    $('loginForm').classList.remove('hidden');
    $('loginScreen').classList.remove('hidden');
    $('email').focus();
