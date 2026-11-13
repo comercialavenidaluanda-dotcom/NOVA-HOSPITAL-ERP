@@ -147,7 +147,7 @@
 
 ## OT-005 — Enfermagem, internamento, cirurgia e maternidade
 
-**Estado:** PLANEADA.  
+**Estado:** EM EXECUÇÃO — fase 1 de enfermagem implementada; validação com utilizador clínico activo pendente.  
 **Prioridade:** Alta.
 
 ### Âmbito
@@ -157,10 +157,22 @@
 - Maternidade, parto, puerpério e registo neonatal.
 - Pediatria e reabilitação.
 
-### Critérios de aceitação
-- Impedir dupla ocupação de cama.
-- Registar autor, hora e motivo em cada transferência.
-- Checklists e consentimentos obrigatórios conforme procedimento.
+### Implementado — fase 1 (13-11-2026)
+- Criado o registo imutável de avaliações de enfermagem por internamento, paciente, unidade, departamento, autor autenticado e data/hora.
+- Campos validados no servidor para pressão arterial, frequência cardíaca, frequência respiratória, temperatura, SpO₂, escala de dor, consciência e observações.
+- Criado o registo de passagem de turno, com turno, enfermeiro de saída/entrada, resumo clínico, tarefas pendentes e sinalizadores de risco; a confirmação bilateral e a selecção de profissionais ficam para a fase seguinte.
+- Permissões específicas `hospital.nursing.read`, `hospital.nursing.write` e `hospital.nursing.handover`; leitura de internamentos atribuída ao perfil nurse.
+- Interface de Enfermagem ligada ao módulo hospitalar, com selecção de internamento activo, formulário de avaliação e histórico. Sem dados clínicos fictícios.
+- Escrita efectuada por RPC autenticada; leitura limitada por organização, unidade e departamento.
+
+### Critérios de aceitação / pendentes
+- Validar com conta real de enfermeiro activo, departamento e unidade atribuídos.
+- Implementar plano de cuidados, tarefas, administração de terapêutica e reconciliação com prescrição/dispensa da Farmácia.
+- Completar passagem de turno com lista de enfermeiros elegíveis e confirmação pelo receptor.
+- Desenvolver bloco operatório: agenda, equipa, sala, checklist pré/intra/pós-operatória, consentimentos e consumíveis.
+- Desenvolver maternidade: episódio obstétrico, trabalho de parto, parto, puerpério e registo neonatal.
+- Integrar Pediatria e reabilitação com os episódios clínicos existentes.
+- Impedir dupla ocupação de cama; registar autor, hora e motivo em cada transferência.
 - Não simular actos clínicos como se fossem cuidados reais.
 
 ## OT-006 — Motor financeiro, facturação e AGT / SAF-T AO
@@ -219,6 +231,8 @@
 - Homologação interna e homologação AGT identificadas como estados distintos.
 
 ## Registo de execução
+| 2026-11-13 | OT-005 | Fase 1 de Enfermagem: avaliações de sinais vitais, histórico, permissões e base segura para passagem de turno; interface integrada ao workspace hospitalar | migration `ot005_nursing_assessments_and_shift_handover`, RPC autenticada e commit `60df63cbfef72443eec6f1f25cc89801fecd074e`; validação com conta clínica activa pendente |
+
 | 2026-11-12 | OT-004 | Fundação da farmácia e aprovisionamento: catálogo, fornecedores, locais, lotes, prescrições, dispensas, movimentos e encomendas; APIs e interface inicial | migrations OT004 de estrutura, integridade, recepção/dispensa transaccional, API segura, encomendas e ajustes RLS/índices; testes autenticados revertidos aprovados |
 
 | Data | OT | Alteração | Evidência |
