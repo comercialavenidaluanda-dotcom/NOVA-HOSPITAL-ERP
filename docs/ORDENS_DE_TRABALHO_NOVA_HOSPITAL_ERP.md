@@ -124,20 +124,21 @@
 - APIs de aplicação com autorização e validação; funções transaccionais de entrada de stock e dispensa mantidas no schema operacional.
 - Recepção de lote rejeita validade expirada, cria o saldo e o movimento de entrada na mesma transacção.
 - Dispensa bloqueia lote expirado/inactivo, quantidade superior ao saldo e quantidade superior ao remanescente prescrito; actualiza lote, dispensa e livro de movimentos atomicamente.
-- Interface do módulo Farmácia: catálogo de medicamentos, fornecedores, locais, encomendas em rascunho, recepção de lotes, dispensa a partir de prescrição activa e consulta de saldos/validade.
+- Interface do módulo Farmácia: catálogo de medicamentos, fornecedores, locais, encomendas em rascunho, aprovação de encomendas, recepção vinculada à encomenda por artigo/lote/validade, dispensa a partir de prescrição activa e consulta de saldos/validade.
 - Encomendas criadas em transacção com cabeçalho e artigo; escrita directa nas tabelas de encomenda bloqueada ao cliente.
 - Índices de FEFO, histórico de movimentos, prescrições e encomendas; índices de relações e políticas RLS afinados.
 
 ### Testes realizados
 - Teste autenticado, em transacção revertida, criou medicamento e fornecedor temporários, local de farmácia, recebeu lote e efectuou dispensa; o saldo diminuiu de 7 para 5 e foram criados dois movimentos de stock.
 - Teste autenticado de criação de encomenda confirmou cabeçalho em rascunho e linha de artigo.
+- Teste transaccional de aprovação e recepção parcial/total: encomenda de 10 unidades aprovada, recepção de 4 e depois 6, estado passou por `partially_received` até `received`, saldo final de stock 10 e tentativa de excesso rejeitada.
 - Todos os testes foram revertidos; nenhum medicamento, fornecedor, lote, dispensa ou encomenda de teste ficou persistido.
 - Não foram inventados preços comerciais, fornecedores reais ou movimentos reais de stock.
 
 ### Pendências / critérios de aceitação finais
 - Validar o circuito com conta farmacêutica activa e perfil profissional/cédula confirmados.
 - Criar prescrição a partir do acto clínico, com autoria do prescritor e revisão farmacêutica.
-- Aprovação de encomenda, recepção parcial/total contra encomenda e reconciliação de quantidades.
+- Reconciliação documental com guia/factura do fornecedor e validação por perfil farmacêutico activo; o fluxo técnico de aprovação e recepção parcial/total já está implementado.
 - Inventários físicos, ajustes com dupla validação, devoluções, reversões e transferências entre locais.
 - Controlo de medicamentos sujeitos a receita especial/controlo legal, registo próprio e segregação de funções.
 - Alertas de stock mínimo, validade próxima, recolhas/recalls e cadeia de frio.
