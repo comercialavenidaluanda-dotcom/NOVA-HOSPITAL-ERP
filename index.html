@@ -1065,19 +1065,41 @@ async function loadReceptionDocuments(){
   bindFinanceInvoiceForm();
  }
  async function searchFinancePatient(){
-  const q=$('financePatientSearch').value.trim(),host=$('financePatientResults');if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return;}
+  const q=$('financePatientSearch').value.trim(),host=$('financePatientResults');
+  if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return;}
   host.innerHTML='<div class="empty">A pesquisar pacientes…</div>';
-  try{const rows=await publicCall('api_search_patient_directory',{p_organization_id:org(),p_query:q,p_limit:20,p_offset:0});
-   host.innerHTML=rows?.length?'<div class="table-wrap"><table><thead><tr><th>NRH</th><th>Paciente</th><th></th></tr></thead><tbody>'+rows.map(p=>'<tr><td>'+esc(p.patient_number||'—')+'</td><td>'+esc(p.preferred_name||p.full_name)+'</td><td><button type="button" class="btn btn-outline small" data-finance-patient="'+esc(p.patient_id)+'" data-name="'+esc(p.preferred_name||p.full_name)+'">Seleccionar</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Paciente não encontrado no registo desta instituição.</div>';
-   host.querySelectorAll('[data-finance-patient]').forEach(b=>b.addEventListener('click',()=>{financePatient={id:b.dataset.financePatient,name:b.dataset.name};$('financePatientSelected').textContent='Paciente associado: '+financePatient.name;$('financePatientSelected').classList.remove('hidden');}));
-  }catch(err){host.innerHTML='<div class="notice error">'+esc(err.message)+'</div>'}
+  try{
+   const rows=await publicCall('api_search_patient_directory',{p_organization_id:org(),p_query:q,p_limit:20,p_offset:0});
+   if(!rows?.length){host.innerHTML='<div class="empty">Paciente não encontrado no registo desta instituição.</div>';return;}
+   host.innerHTML='<div class="table-wrap"><table><thead><tr><th>NRH</th><th>Paciente</th><th>Contacto</th><th></th></tr></thead><tbody>'+
+    rows.map(p=>'<tr><td>'+esc(p.patient_number||p.medical_id||'—')+'</td><td>'+esc(p.preferred_name||p.full_name)+'</td><td>'+esc(p.contact_phone||'—')+'</td><td><button type="button" class="btn btn-outline small" data-finance-patient="'+esc(p.patient_id)+'">Seleccionar</button></td></tr>').join('')+
+    '</tbody></table></div>';
+   host.querySelectorAll('[data-finance-patient]').forEach(b=>b.addEventListener('click',()=>{
+    const p=rows.find(x=>String(x.patient_id)===String(b.dataset.financePatient));
+    if(!p){toast('Não foi possível identificar o paciente seleccionado.','error');return;}
+    financePatient={id:p.patient_id,name:p.preferred_name||p.full_name,patient_number:p.patient_number||p.medical_id||null};
+    const name=$('financeCustomerName');
+    if(name)name.value=financePatient.name;
+    const selected=$('financePatientSelected');
+    if(selected){selected.innerHTML='<b>Paciente associado à factura:</b> '+esc(financePatient.name)+(financePatient.patient_number?' · NRH '+esc(financePatient.patient_number):'')+'<br><span class="small">O nome do adquirente foi preenchido automaticamente e pode ser alterado.</span>';selected.classList.remove('hidden');}
+    host.innerHTML='<div class="notice success">Paciente seleccionado: '+esc(financePatient.name)+'.</div>';
+    scheduleFinanceInvoiceQuote();
+   }));
+  }catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Falha na pesquisa de pacientes.')+'</div>';}
  }
  async function searchFinanceCustomer(){
   const q=$('financeCustomerSearch').value.trim(),host=$('financeCustomerResults');if(q.length<2){toast('Introduza pelo menos 2 caracteres.','error');return;}
   host.innerHTML='<div class="empty">A pesquisar clientes/pacientes cadastrados…</div>';
   try{const rows=await publicCall('api_search_patient_directory',{p_organization_id:org(),p_query:q,p_limit:20,p_offset:0});
    host.innerHTML=rows?.length?'<div class="table-wrap"><table><thead><tr><th>Registo</th><th>Nome</th><th></th></tr></thead><tbody>'+rows.map(p=>'<tr><td>'+esc(p.patient_number||'—')+'</td><td>'+esc(p.preferred_name||p.full_name)+'</td><td><button type="button" class="btn btn-outline small" data-finance-customer="'+esc(p.patient_id)+'" data-name="'+esc(p.preferred_name||p.full_name)+'">Usar como adquirente</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Não foi encontrado um registo correspondente.</div>';
-   host.querySelectorAll('[data-finance-customer]').forEach(b=>b.addEventListener('click',()=>{$('financeCustomerName').value=b.dataset.name;host.innerHTML='<div class="notice success">Adquirente seleccionado: '+esc(b.dataset.name)+'. O NIF deve ser confirmado/preenchido no campo próprio.</div>';}));
+   host.querySelectorAll('[data-finance-customer]').forEach(b=>b.addEventListener('click',()=>{
+    const p=rows.find(x=>String(x.patient_id)===String(b.dataset.financeCustomer));
+    if(p)financePatient={id:p.patient_id,name:p.preferred_name||p.full_name,patient_number:p.patient_number||p.medical_id||null};
+    $('financeCustomerName').value=b.dataset.name;
+    if(p){const selected=$('financePatientSelected');if(selected){selected.textContent='Paciente associado: '+financePatient.name;selected.classList.remove('hidden');}}
+    host.innerHTML='<div class="notice success">Adquirente seleccionado: '+esc(b.dataset.name)+'. O NIF deve ser confirmado/preenchido no campo próprio.</div>';
+    scheduleFinanceInvoiceQuote();
+   }));
   }catch(err){host.innerHTML='<div class="notice error">'+esc(err.message)+'</div>'}
  }
  async function openFinanceCash(){
@@ -1118,8 +1140,14 @@ async function loadReceptionDocuments(){
   const lines=$('financeInvoiceLines');
   if(lines&&!lines.dataset.financeBound){
    lines.dataset.financeBound='1';
-   lines.addEventListener('change',e=>{if(e.target.matches('.financeLineService')){renderFinanceInvoiceLineTax(e.target.closest('.finance-invoice-line'));updateFinanceInvoicePreview();}});
-   lines.addEventListener('input',e=>{if(e.target.matches('.financeLineQuantity,.financeLinePrice,.financeLineDiscount,.financeLineDescription'))updateFinanceInvoicePreview();});
+   const recalculate=e=>{
+    const row=e.target.closest('.finance-invoice-line');
+    if(!row)return;
+    if(e.target.matches('.financeLineService'))renderFinanceInvoiceLineTax(row);
+    if(e.target.matches('.financeLineService,.financeLineQuantity,.financeLinePrice,.financeLineDiscount,.financeLineDescription'))updateFinanceInvoicePreview();
+   };
+   lines.addEventListener('change',recalculate);
+   lines.addEventListener('input',recalculate);
    lines.addEventListener('click',e=>{const remove=e.target.closest('[data-finance-remove-line]');if(remove){remove.closest('.finance-invoice-line')?.remove();updateFinanceInvoicePreview();}});
   }
   const add=$('financeAddInvoiceLine');
