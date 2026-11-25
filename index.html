@@ -1710,9 +1710,7 @@ async function loadReceptionDocuments(){
   if($('agtSettingsForm'))$('agtSettingsForm').addEventListener('submit',saveAgtSettings);
   document.querySelectorAll('[data-finance-close]').forEach(b=>b.addEventListener('click',()=>closeFinanceCash(b.dataset.financeClose)));
   document.querySelectorAll('[data-finance-issue]').forEach(b=>b.addEventListener('click',()=>issueFinanceInvoice(b.dataset.financeIssue)));
-  const invoiceLines=$('financeInvoiceLines');if(invoiceLines&&!invoiceLines.dataset.bound){invoiceLines.dataset.bound='1';invoiceLines.addEventListener('change',e=>{if(e.target.matches('.financeLineService')){renderFinanceInvoiceLineTax(e.target.closest('.finance-invoice-line'));updateFinanceInvoicePreview();}});invoiceLines.addEventListener('input',e=>{if(e.target.matches('.financeLineQuantity,.financeLinePrice,.financeLineDiscount,.financeLineDescription'))updateFinanceInvoicePreview();});invoiceLines.addEventListener('click',e=>{const remove=e.target.closest('[data-finance-remove-line]');if(remove){remove.closest('.finance-invoice-line')?.remove();updateFinanceInvoicePreview();}});}
-  const addLine=$('financeAddInvoiceLine');if(addLine&&!addLine.dataset.bound){addLine.dataset.bound='1';addLine.addEventListener('click',addFinanceInvoiceLine);}
-  updateFinanceInvoicePreview();
+  // Invoice controls are bound once by bindFinanceInvoiceForm() after the finance workspace renders.
   if($('docCenterTemplate'))$('docCenterTemplate').addEventListener('change',renderDocumentCenterFields);
    if($('docCenterCategory'))$('docCenterCategory').addEventListener('change',renderDocumentCenterTemplateOptions);
    if($('docCenterSearchPatient'))$('docCenterSearchPatient').addEventListener('click',searchDocumentCenterPatient);
