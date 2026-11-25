@@ -1228,13 +1228,16 @@ async function loadReceptionDocuments(){
    const priceRaw=row.querySelector('.financeLinePrice')?.value;
    const discountRaw=row.querySelector('.financeLineDiscount')?.value;
    const quantity=Number(qtyRaw||0),unitPrice=Number(priceRaw||0),discount=Number(discountRaw||0);
+   // Ignore untouched blank rows; they must not cancel quotes for completed lines.
+   if(!serviceId&&!description&&priceRaw===''&&(discountRaw===''||discount===0))return;
    if(!serviceId&&(!description||priceRaw===''||!Number.isFinite(unitPrice)))incomplete=true;
    if(!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(discount)||discount<0)incomplete=true;
    items.push({service_id:serviceId||null,description:serviceId?null:description,quantity,unit_price:serviceId?null:unitPrice,discount_amount:discount});
   });
   if(!items.length||incomplete){
-   if(status)status.textContent='Preencha descrição, quantidade e preço dos artigos manuais para calcular.';
-   ['financeInvoiceSubtotal','financeInvoiceDiscount','financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
+   if(status)status.textContent=items.length?'Complete os campos da linha em edição para actualizar o cálculo.':'Adicione um serviço ou artigo para calcular a factura.';
+   // Keep the visible commercial subtotal/discount preview; only server-only totals stay pending.
+   ['financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
    return;
   }
   if(status)status.textContent='A calcular no motor fiscal do servidor…';
