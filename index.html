@@ -1056,7 +1056,7 @@ async function loadReceptionDocuments(){
   function generateBillingCatalogCode(){
    const category=$('billingCatalogCategory')?.value||'other',name=$('billingCatalogName')?.value||'';
    const prefix={consultation:'CONS',emergency:'URG',inpatient:'INT',surgery:'BLO',laboratory:'LAB',imaging:'IMG',maternity:'MAT',therapy:'TER',pharmacy:'FAR',other:'SRV'}[category]||'SRV';
-   const words=name.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').split('-').filter(Boolean);
+   const words=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').split('-').filter(Boolean);
    if(!words.length)throw new Error('Introduza o nome do serviço antes de gerar o código.');
    $('billingCatalogCode').value=(prefix+'-'+words.join('-')).slice(0,40);
   }
