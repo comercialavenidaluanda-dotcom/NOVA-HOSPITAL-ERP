@@ -177,7 +177,7 @@
 
 ## OT-006 — Motor financeiro, facturação e AGT / SAF-T AO
 
-**Estado:** EM EXECUÇÃO — motor de cálculo e validação de linhas já preparado; homologação fiscal oficial pendente.  
+**Estado:** EM EXECUÇÃO — alinhamento do tipo de série fiscal corrigido; interface de Faturação reorganizada; testes autenticados e homologação fiscal oficial pendentes.  
 **Prioridade:** Crítica.
 
 ### Âmbito
@@ -231,6 +231,7 @@
 - Homologação interna e homologação AGT identificadas como estados distintos.
 
 ## Registo de execução
+| 2026-11-26 | OT-006 | Corrigida a incompatibilidade entre o tipo de série fiscal (`invoice`) e a etiqueta documental (`FACTURA`) nas funções de workspace, listagem de séries e emissão; interface de Faturação reorganizada, pesquisa de paciente/adquirente unificada e SAF-T retirado do módulo | migration `finance_invoice_series_type_alignment` aplicada no Supabase; `index.html` na branch `feature/finance-primavera-invoice-restructure`; verificação SQL dos quatro predicados concluída; testes com sessão autenticada pendentes |
 | 2026-11-13 | OT-005 | Fase 1 de Enfermagem: avaliações de sinais vitais, histórico, permissões e base segura para passagem de turno; interface integrada ao workspace hospitalar | migration `ot005_nursing_assessments_and_shift_handover`, RPC autenticada e commit `60df63cbfef72443eec6f1f25cc89801fecd074e`; validação com conta clínica activa pendente |
 
 | 2026-11-12 | OT-004 | Fundação da farmácia e aprovisionamento: catálogo, fornecedores, locais, lotes, prescrições, dispensas, movimentos e encomendas; APIs e interface inicial | migrations OT004 de estrutura, integridade, recepção/dispensa transaccional, API segura, encomendas e ajustes RLS/índices; testes autenticados revertidos aprovados |
