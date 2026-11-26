@@ -231,22 +231,29 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
  window.novaLoginSubmit=async function(e){
   if(e)e.preventDefault();
   const email=$('email').value.trim(),password=$('password').value,btn=$('loginBtn'),feedback=$('loginFeedback');
+  let authenticated=false;
   if(feedback){feedback.textContent='A autenticar…';feedback.classList.remove('hidden');feedback.style.background='#eef4fb';feedback.style.color='#243b53';}
   if(!email||!password){if(feedback){feedback.textContent='Introduza o email e a palavra-passe.';feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast('Introduza o email e a palavra-passe.','error');return false;}
   if(btn)btn.disabled=true;
   try{
    supabase=client();
-   const {error}=await supabase.auth.signInWithPassword({email,password});
-   if(error)throw error;
-   if(feedback)feedback.classList.add('hidden');
+   const {data:{session},error:sessionError}=await supabase.auth.getSession();
+   if(sessionError)throw sessionError;
+   if(!session){
+    const {error}=await supabase.auth.signInWithPassword({email,password});
+    if(error)throw error;
+   }
+   authenticated=true;
    await startApp();
+   if(feedback)feedback.classList.add('hidden');
   }catch(err){
-   const message=err?.message||'Falha na autenticação. Verifique os dados e tente novamente.';
-   if(feedback){feedback.textContent='Não foi possível iniciar sessão: '+message;feedback.classList.remove('hidden');feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast(message,'error');
+   const message=err?.message||'Ocorreu um erro inesperado.';
+   const prefix=authenticated?'A sessão foi aceite, mas não foi possível carregar a clínica. Tente actualizar a página. ':'Não foi possível iniciar sessão: ';
+   if(feedback){feedback.textContent=prefix+message;feedback.classList.remove('hidden');feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast(prefix+message,'error');
    $('email').value=email;
-   $('password').value='';
+   if(!authenticated)$('password').value='';
    $('loginForm').classList.remove('hidden');
-   $('loginScreen').classList.remove('hidden');
+   setScreen('loginScreen');
    $('email').focus();
   }finally{if(btn)btn.disabled=false;}
   return false;
@@ -254,7 +261,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
  const cfg=()=>({key:DEFAULT_PUBLISHABLE_KEY});
  const org=()=>currentOrganizationId;
  function toast(msg,kind=''){const t=$('toast');t.textContent=msg;t.className='toast';if(kind==='error')t.style.background='#8e3030';else t.style.background='#17283b';setTimeout(()=>t.classList.add('hidden'),4500)}
- function client(){if(!window.supabase?.createClient)throw new Error('Não foi possível iniciar a ligação à plataforma. Verifique a internet e tente novamente.');const c=cfg();if(!c.key)throw new Error('A ligação da plataforma não está disponível.');return window.supabase.createClient(PROJECT_URL,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})}
+ function client(){if(supabase)return supabase;if(!window.supabase?.createClient)throw new Error('Não foi possível iniciar a ligação à plataforma. Verifique a internet e tente novamente.');const c=cfg();if(!c.key)throw new Error('A ligação da plataforma não está disponível.');supabase=window.supabase.createClient(PROJECT_URL,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return supabase}
  function setScreen(id){['loginScreen','appScreen'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
   async function call(schema,name,args){const {data,error}=await supabase.schema(schema).rpc(name,args);if(error)throw error;return data}
  async function publicCall(name,args){const {data,error}=await supabase.rpc(name,args);if(error)throw error;return data}
