@@ -251,7 +251,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
 (() => {
  const PROJECT_URL='https://kpeoczaqxucumgunfweq.supabase.co';
  const DEFAULT_PUBLISHABLE_KEY='sb_publishable_9R24dJWZvB5fIJI-zUbDcA_dUAxjDSV';
- let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in', receptionDocumentTemplates=[], documentTemplatesCache=[], documentRows=[], documentAuditRows=[], documentCenterTemplates=[], documentCenterPatient=null, documentCenterRows=[], financeWorkspace=null, financePatient=null, financeQuoteRequest=0, financeQuoteTimer=null, financeCustomerSearchTimer=null, financeCustomerSearchRequest=0, accountingWorkspace=null,pharmacyWorkspaceData={medications:[],suppliers:[],locations:[],lots:[],prescriptions:[],prescriptionItems:[],purchaseOrders:[]};
+ let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in', receptionDocumentTemplates=[], documentTemplatesCache=[], documentRows=[], documentAuditRows=[], documentCenterTemplates=[], documentCenterPatient=null, documentCenterRows=[], financeWorkspace=null, financePatient=null, financeQuoteRequest=0, financeQuoteTimer=null, financeCustomerSearchTimer=null, financeCustomerSearchRequest=0, financeWorkspaceRequest=0, accountingWorkspace=null,pharmacyWorkspaceData={medications:[],suppliers:[],locations:[],lots:[],prescriptions:[],prescriptionItems:[],purchaseOrders:[]};
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  window.novaLoginSubmit=async function(e){
@@ -293,7 +293,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
   $('orgLabel').textContent=chosen.display_name||chosen.legal_name||'Instituição';
   await loadInstitutionBlueprint();
   await applySavedOrganizationTheme().catch(err=>console.warn('Preferências visuais indisponíveis:',err.message));
-  select.onchange=async()=>{currentOrganizationId=select.value;activeModuleFilter=null;const item=userOrganizations.find(x=>x.organization_id===currentOrganizationId);$('orgLabel').textContent=item?.display_name||item?.legal_name||'Instituição';await loadInstitutionBlueprint();await applySavedOrganizationTheme().catch(err=>console.warn(err));navigate(currentPage);};
+  select.onchange=async()=>{if(financeCustomerSearchTimer)clearTimeout(financeCustomerSearchTimer);if(financeQuoteTimer)clearTimeout(financeQuoteTimer);financeCustomerSearchTimer=null;financeQuoteTimer=null;financeCustomerSearchRequest++;financeQuoteRequest++;financeWorkspaceRequest++;financePatient=null;financeWorkspace=null;currentOrganizationId=select.value;activeModuleFilter=null;const item=userOrganizations.find(x=>x.organization_id===currentOrganizationId);$('orgLabel').textContent=item?.display_name||item?.legal_name||'Instituição';await loadInstitutionBlueprint();await applySavedOrganizationTheme().catch(err=>console.warn(err));navigate(currentPage);};
   return chosen;
  }
  async function finishPendingInstitutionRegistration(user){
@@ -1053,10 +1053,23 @@ async function loadReceptionDocuments(){
   '</div>';
  }
  async function loadFinanceWorkspace(){
-  const host=$('financeCashWorkspace');if(!host)return;
-  try{financeWorkspace=await publicCall('api_finance_workspace',{p_organization_id:org()});try{const series=await publicCall('api_finance_invoice_series',{p_organization_id:org()});financeWorkspace.fiscal_series=series?.series||[];}catch(_){financeWorkspace.fiscal_series=[];}renderFinanceWorkspace();}
-  catch(err){host.innerHTML='<div class="notice error">'+esc(err.message||'Sem acesso financeiro')+'</div>';throw err;}
-
+  const host=$('financeCashWorkspace'),request=++financeWorkspaceRequest,organizationId=org();
+  if(!host)return;
+  if(!organizationId){host.innerHTML='<div class="notice error">Seleccione uma instituição para consultar a faturação.</div>';return;}
+  host.innerHTML='<div class="empty">A actualizar dados financeiros…</div>';
+  try{
+   const workspace=await publicCall('api_finance_workspace',{p_organization_id:organizationId});
+   let fiscalSeries=[];
+   try{const series=await publicCall('api_finance_invoice_series',{p_organization_id:organizationId});fiscalSeries=series?.series||[];}catch(_){fiscalSeries=[];}
+   if(request!==financeWorkspaceRequest||org()!==organizationId)return;
+   financeWorkspace={...(workspace||{}),fiscal_series:fiscalSeries};
+   renderFinanceWorkspace();
+  }catch(err){
+   if(request!==financeWorkspaceRequest||org()!==organizationId)return;
+   host.innerHTML='<div class="notice error">'+esc(err.message||'Sem acesso financeiro')+'</div>';
+   throw err;
+  }
+ }
  let agtWorkspace=null;
  async function loadAgtWorkspace(){
   agtWorkspace=await publicCall('api_agt_workspace',{p_organization_id:org()});
@@ -1084,7 +1097,6 @@ async function loadReceptionDocuments(){
    await loadAgtWorkspace();toast('Configuração fiscal guardada.','success');
   }catch(err){if(fb)fb.textContent=err.message||'Não foi possível guardar.';toast(err.message||'Falha ao guardar configuração AGT','error');}
   finally{if(btn)btn.disabled=false;}
- }
  }
  function moneyAOA(v){return Number(v||0).toLocaleString('pt-AO',{minimumFractionDigits:2,maximumFractionDigits:2})+' Kz';}
  function financeInvoiceStatus(status){const labels={draft:'Rascunho',issued:'Emitida',partially_paid:'Parcialmente paga',paid:'Paga',overdue:'Vencida',cancelled:'Anulada',voided:'Anulada'};return '<span class="status '+(status==='paid'?'success':status==='draft'?'warn':'')+'">'+esc(labels[status]||status)+'</span>';}
@@ -1215,14 +1227,13 @@ async function loadReceptionDocuments(){
     if(financeCustomerSearchTimer)clearTimeout(financeCustomerSearchTimer);
     // Invalida resultados de pesquisas anteriores enquanto o utilizador continua a escrever.
     financeCustomerSearchRequest++;
-    const q=customerQuery.value.trim(),host=$('financeCustomerResults');
+    const q=customerQuery.value.trim(),host=$('financeCustomerResults'),searchButton=$('financeSearchCustomer');
+    if(searchButton)searchButton.disabled=false;
     if(q.length<2){if(host)host.innerHTML='';return;}
     if(host)host.innerHTML='<div class="empty">A preparar pesquisa…</div>';
     financeCustomerSearchTimer=setTimeout(()=>searchFinanceCustomer(),350);
    });
   }
-  const refresh=$('financeRefresh');
-  if(refresh&&!refresh.dataset.financeBound){refresh.dataset.financeBound='1';refresh.addEventListener('click',loadFinanceWorkspace);}
   const lines=$('financeInvoiceLines');
   if(lines&&!lines.dataset.financeBound){
    lines.dataset.financeBound='1';
@@ -1276,6 +1287,37 @@ async function loadReceptionDocuments(){
    const reason=row.querySelector('.financeLineTaxReason');if(reason)reason.textContent='Artigo manual sem classificação fiscal automática. Cadastre-o no catálogo institucional para aplicar o enquadramento correcto.';
   }
  }
+ function collectFinanceInvoiceItems(){
+  const host=$('financeInvoiceLines');
+  if(!host)return {items:[],error:'O formulário de linhas da factura não está disponível.'};
+  const items=[];let error=null;
+  host.querySelectorAll('.finance-invoice-line').forEach(row=>{
+   const serviceId=row.querySelector('.financeLineService')?.value||'';
+   const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
+   const quantityRaw=row.querySelector('.financeLineQuantity')?.value??'';
+   const priceRaw=row.querySelector('.financeLinePrice')?.value??'';
+   const discountRaw=row.querySelector('.financeLineDiscount')?.value??'';
+   const quantity=Number(quantityRaw),discount=discountRaw===''?0:Number(discountRaw);
+   const untouched=!serviceId&&!description&&priceRaw===''&&(discountRaw===''||discount===0)&&(quantityRaw===''||quantity===1);
+   if(untouched)return;
+   if(!Number.isFinite(quantity)||quantity<=0){error=error||'A quantidade de cada artigo deve ser superior a zero.';return;}
+   if(!Number.isFinite(discount)||discount<0){error=error||'O desconto deve ser um valor igual ou superior a zero.';return;}
+   let unitPrice;
+   if(serviceId){
+    const option=row.querySelector('.financeLineService')?.selectedOptions?.[0],raw=option?.dataset.price;
+    if(raw===undefined||raw===''){error=error||'O serviço seleccionado não tem preço configurado no catálogo.';return;}
+    unitPrice=Number(raw);
+   }else{
+    if(!description){error=error||'Seleccione um serviço ou preencha a descrição do artigo manual.';return;}
+    if(priceRaw===''){error=error||'Indique o preço unitário do artigo manual.';return;}
+    unitPrice=Number(priceRaw);
+   }
+   if(!Number.isFinite(unitPrice)||unitPrice<0){error=error||'O preço unitário deve ser um valor igual ou superior a zero.';return;}
+   if(discount>(quantity*unitPrice)+0.005){error=error||'O desconto não pode exceder o valor bruto da linha.';return;}
+   items.push({service_id:serviceId||null,description:serviceId?null:description,quantity,unit_price:serviceId?null:unitPrice,discount_amount:discount});
+  });
+  return {items,error};
+ }
  function updateFinanceInvoicePreview(){
   const host=$('financeInvoiceLines');if(!host)return;
   let subtotal=0,discountTotal=0,hasIncomplete=false;
@@ -1299,47 +1341,30 @@ async function loadReceptionDocuments(){
  }
  function scheduleFinanceInvoiceQuote(){
   if(financeQuoteTimer)clearTimeout(financeQuoteTimer);
+  financeQuoteRequest++;
   financeQuoteTimer=setTimeout(refreshFinanceInvoiceQuote,350);
  }
  async function refreshFinanceInvoiceQuote(){
-  const request=++financeQuoteRequest;
-  const host=$('financeInvoiceLines'),status=$('financeInvoiceCalculationStatus');
+  const request=++financeQuoteRequest,host=$('financeInvoiceLines'),status=$('financeInvoiceCalculationStatus'),organizationId=org();
   if(!host)return;
-  if(!org()){if(status)status.textContent='Seleccione uma instituição para calcular a factura.';return;}
-  const items=[];let incomplete=false;
-  host.querySelectorAll('.finance-invoice-line').forEach(row=>{
-   const serviceId=row.querySelector('.financeLineService')?.value||'';
-   const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
-   const qtyRaw=row.querySelector('.financeLineQuantity')?.value;
-   const priceRaw=row.querySelector('.financeLinePrice')?.value;
-   const discountRaw=row.querySelector('.financeLineDiscount')?.value;
-   const quantity=Number(qtyRaw||0),unitPrice=Number(priceRaw||0),discount=Number(discountRaw||0);
-   // Ignore untouched blank rows; they must not cancel quotes for completed lines.
-   if(!serviceId&&!description&&priceRaw===''&&(discountRaw===''||discount===0))return;
-   if(!serviceId&&(!description||priceRaw===''||!Number.isFinite(unitPrice)))incomplete=true;
-   if(!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(discount)||discount<0)incomplete=true;
-   items.push({service_id:serviceId||null,description:serviceId?null:description,quantity,unit_price:serviceId?null:unitPrice,discount_amount:discount});
-  });
-  if(!items.length||incomplete){
-   if(status)status.textContent=items.length?'Complete os campos da linha em edição para actualizar o cálculo.':'Adicione um serviço ou artigo para calcular a factura.';
-   // Keep the visible commercial subtotal/discount preview; only server-only totals stay pending.
-   ['financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
-   return;
-  }
+  if(!organizationId){if(status)status.textContent='Seleccione uma instituição para calcular a factura.';return;}
+  const collected=collectFinanceInvoiceItems();
+  if(collected.error){if(status)status.textContent=collected.error;['financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});return;}
+  if(!collected.items.length){if(status)status.textContent='Adicione um serviço ou artigo para calcular a factura.';['financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});return;}
   if(status)status.textContent='A calcular no motor fiscal do servidor…';
   try{
-   const quote=await publicCall('api_finance_calculate_invoice_quote',{p_organization_id:org(),p_items:items});
-   if(request!==financeQuoteRequest)return;
-   $('financeInvoiceSubtotal').textContent=moneyAOA(quote.subtotal);
-   $('financeInvoiceDiscount').textContent=moneyAOA(quote.discount_total);
+   const quote=await publicCall('api_finance_calculate_invoice_quote',{p_organization_id:organizationId,p_items:collected.items});
+   if(request!==financeQuoteRequest||org()!==organizationId||$('financeInvoiceLines')!==host)return;
+   const subtotal=$('financeInvoiceSubtotal'),discount=$('financeInvoiceDiscount'),tax=$('financeInvoiceTax'),total=$('financeInvoiceTotal');
+   if(subtotal)subtotal.textContent=moneyAOA(quote.subtotal);
+   if(discount)discount.textContent=moneyAOA(quote.discount_total);
    const taxLabel=(quote.tax_summary||[]).map(t=>String(t.tax_code||'IVA')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').join(' · ');
-   $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
-   $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
+   if(tax)tax.textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
+   if(total)total.textContent=moneyAOA(quote.total);
    if(status)status.textContent=quote.tax_calculation_status==='not_applied_fiscal_profile_pending'?'Cálculo comercial do servidor · IVA não aplicado: perfil fiscal por configurar. Este rascunho não é factura fiscal.':'Cálculo do servidor · sem numeração fiscal · valores sujeitos a nova validação na emissão.';
   }catch(err){
-   if(request!==financeQuoteRequest)return;
-   const message=financeInvoiceError(err.message);
-   if(status)status.textContent=message;
+   if(request!==financeQuoteRequest||org()!==organizationId||$('financeInvoiceLines')!==host)return;
+   const message=financeInvoiceError(err.message);if(status)status.textContent=message;
    const feedback=$('financeInvoiceFeedback');if(feedback)feedback.textContent=message;
    ['financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
   }
@@ -1356,52 +1381,58 @@ async function loadReceptionDocuments(){
   };if(String(message||'').startsWith('SERVICE_TEST_PRICE_NOT_APPROVED'))return 'O preço deste serviço ainda está identificado como simulado. Confirme e aprove a tarifa real no catálogo antes da emissão fiscal.';if(String(message||'').startsWith('SERVICE_TAX_CLASSIFICATION_REQUIRED'))return 'O serviço seleccionado não tem classificação fiscal validada. Configure o código AGT, a taxa ou a isenção e a respectiva base legal no catálogo de serviços.';if(String(message||'').startsWith('VAT_EXEMPTION_DATA_INCOMPLETE'))return 'A isenção do serviço está incompleta. Confirme o código de isenção, o motivo e a norma legal no catálogo.';return map[message]||message||'Não foi possível guardar a factura.';
  }
  async function previewFinanceInvoice(){
+  const form=$('financeInvoiceForm'),organizationId=org();
   try{
-   const rows=Array.from(document.querySelectorAll('#financeInvoiceLines .finance-invoice-line'));
-   if(!rows.length)throw new Error('Adicione pelo menos um serviço ou artigo.');
-   const items=rows.map(row=>{
-    const serviceId=row.querySelector('.financeLineService')?.value||'';
-    const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
-    const quantity=Number(row.querySelector('.financeLineQuantity')?.value||0);
-    const unitPrice=Number(row.querySelector('.financeLinePrice')?.value||0);
-    const discount=Number(row.querySelector('.financeLineDiscount')?.value||0);
-    if(!serviceId&&!description)throw new Error('Preencha a descrição de cada artigo manual.');
-    return {service_id:serviceId||null,description:serviceId?null:description,quantity,unit_price:serviceId?null:unitPrice,discount_amount:discount};
-   });
-   const quote=await publicCall('api_finance_calculate_invoice_quote',{p_organization_id:org(),p_items:items});
-   const customer=$('financeCustomerName').value.trim()||financePatient?.name||'Adquirente por identificar';
+   if(!form)throw new Error('O formulário da factura não está disponível.');
+   const collected=collectFinanceInvoiceItems();
+   if(collected.error)throw new Error(collected.error);
+   if(!collected.items.length)throw new Error('Adicione pelo menos um serviço ou artigo.');
+   const quote=await publicCall('api_finance_calculate_invoice_quote',{p_organization_id:organizationId,p_items:collected.items});
+   if(org()!==organizationId||$('financeInvoiceForm')!==form)return;
+   const customer=$('financeCustomerName')?.value.trim()||financePatient?.name||'Adquirente por identificar';
    const contentItems=(quote.lines||[]).map(line=>({description:line.description,quantity:line.quantity,unit_price:line.unit_price,discount:line.discount_amount||0,tax_type:line.tax_type,tax_code:line.tax_code,tax_rate:line.tax_rate||0,tax_exemption_code:line.tax_exemption_code,tax_exemption_reason:line.tax_exemption_reason,tax_legal_reference:line.tax_legal_reference,tax:line.tax||0,total:line.total}));
-   const now=new Date().toISOString();
-   const d={document_code:'FACTURA',document_number:'PRÉ-VISUALIZAÇÃO — NÃO EMITIDA',issued_at:now,content_snapshot:{document_name:'Pré-visualização de factura',issued_at:now,institution:{header_title:(userOrganizations.find(x=>x.organization_id===org())?.display_name||userOrganizations.find(x=>x.organization_id===org())?.legal_name||'Instituição'),footer_text:'PRÉ-VISUALIZAÇÃO — documento não emitido e sem valor fiscal'},content:{customer_name:customer,customer_nif:$('financeCustomerNif').value.trim(),patient_name:financePatient?.name||null,currency:'AOA',subtotal:quote.subtotal,discount_total:quote.discount_total,tax_total:quote.tax_total,total_amount:quote.total,items:contentItems,notes:$('financeInvoiceNotes').value.trim(),calculation_source:'server_quote_only'}}};
+   const institution=userOrganizations.find(x=>x.organization_id===organizationId),now=new Date().toISOString();
+   const d={document_code:'FACTURA',document_number:'PRÉ-VISUALIZAÇÃO — NÃO EMITIDA',issued_at:now,content_snapshot:{document_name:'Pré-visualização de factura',issued_at:now,institution:{header_title:(institution?.display_name||institution?.legal_name||'Instituição'),footer_text:'PRÉ-VISUALIZAÇÃO — documento não emitido e sem valor fiscal'},content:{customer_name:customer,customer_nif:$('financeCustomerNif')?.value.trim()||'',patient_name:financePatient?.name||null,currency:'AOA',subtotal:quote.subtotal,discount_total:quote.discount_total,tax_total:quote.tax_total,total_amount:quote.total,items:contentItems,notes:$('financeInvoiceNotes')?.value.trim()||'',calculation_source:'server_quote_only'}}};
    await printIssuedDocument(d);
   }catch(err){const msg=financeInvoiceError(err.message);toast(msg,'error');const fb=$('financeInvoiceFeedback');if(fb)fb.textContent=msg;}
  }
  async function createFinanceInvoice(e){
-  e.preventDefault();const feedback=$('financeInvoiceFeedback'),button=$('financeCreateInvoice');
+  e.preventDefault();
+  const form=$('financeInvoiceForm'),feedback=$('financeInvoiceFeedback'),button=$('financeCreateInvoice');
+  if(!form||form.dataset.saving==='1')return;
+  const organizationId=org(),patientId=financePatient?.id||null,organization=userOrganizations.find(x=>x.organization_id===organizationId);
+  const organizationName=organization?.display_name||organization?.legal_name||'instituição seleccionada',originalButtonText=button?.textContent||'Guardar rascunho';
   try{
-   const rows=Array.from(document.querySelectorAll('#financeInvoiceLines .finance-invoice-line'));
-   if(!rows.length)throw new Error('Adicione pelo menos um serviço ou artigo.');
-   const items=rows.map(row=>{
-    const serviceId=row.querySelector('.financeLineService')?.value||'';
-    const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
-    const quantity=Number(row.querySelector('.financeLineQuantity')?.value||0);
-    const unitPrice=Number(row.querySelector('.financeLinePrice')?.value||0);
-    const discount=Number(row.querySelector('.financeLineDiscount')?.value||0);
-    if(!serviceId&&(!description||!Number.isFinite(unitPrice)))throw new Error('Cada artigo manual precisa de descrição e preço.');
-    return {service_id:serviceId||null,description:serviceId?null:description,quantity,unit_price:serviceId?null:unitPrice,discount_amount:discount};
-   });
-   const customer=$('financeCustomerName').value.trim()||financePatient?.name||'';
+   const collected=collectFinanceInvoiceItems();
+   if(collected.error)throw new Error(collected.error);
+   if(!collected.items.length)throw new Error('Adicione pelo menos um serviço ou artigo.');
+   const customer=$('financeCustomerName')?.value.trim()||financePatient?.name||'';
    if(!customer)throw new Error('Indique o nome do adquirente ou seleccione um paciente.');
-   if(button)button.disabled=true;
-   const result=await publicCall('api_finance_create_invoice',{p_organization_id:org(),p_patient_id:financePatient?.id||null,p_items:items,p_customer_name:customer,p_customer_tax_id:$('financeCustomerNif').value.trim()||null,p_due_date:$('financeDueDate').value||null,p_notes:$('financeInvoiceNotes').value.trim()||null});
-   if(feedback)feedback.textContent='Rascunho guardado · Subtotal: '+moneyAOA(result.invoice.subtotal)+' · IVA: '+moneyAOA(result.invoice.tax_total)+' · Total: '+moneyAOA(result.invoice.total_amount);
-   toast('Rascunho da factura guardado.');$('financeInvoiceForm').reset();financePatient=null;
-   const patientRef=$('financePatientReference');if(patientRef)patientRef.value='';
-   const selected=$('financePatientSelected');if(selected){selected.textContent='';selected.classList.add('hidden');}
-   const host=$('financeInvoiceLines');if(host){host.querySelectorAll('.finance-invoice-line:not(:first-child)').forEach(row=>row.remove());}
-   updateFinanceInvoicePreview();await loadFinanceWorkspace();
+   if(!organizationId)throw new Error('Seleccione uma instituição antes de guardar a factura.');
+   form.dataset.saving='1';if(button){button.disabled=true;button.textContent='A guardar rascunho…';}
+   const result=await publicCall('api_finance_create_invoice',{p_organization_id:organizationId,p_patient_id:patientId,p_items:collected.items,p_customer_name:customer,p_customer_tax_id:$('financeCustomerNif')?.value.trim()||null,p_due_date:$('financeDueDate')?.value||null,p_notes:$('financeInvoiceNotes')?.value.trim()||null});
+   const invoice=result?.invoice||result||{},sameForm=org()===organizationId&&$('financeInvoiceForm')===form;
+   if(sameForm){
+    if(feedback)feedback.textContent=invoice.subtotal!==undefined?'Rascunho guardado · Subtotal: '+moneyAOA(invoice.subtotal)+' · IVA: '+moneyAOA(invoice.tax_total)+' · Total: '+moneyAOA(invoice.total_amount):'Rascunho guardado com sucesso.';
+    try{
+     form.reset();financePatient=null;
+     const patientRef=$('financePatientReference');if(patientRef)patientRef.value='';
+     const selected=$('financePatientSelected');if(selected){selected.textContent='';selected.classList.add('hidden');}
+     const results=$('financeCustomerResults');if(results)results.innerHTML='';
+     const linesHost=$('financeInvoiceLines');
+     if(linesHost){linesHost.querySelectorAll('.finance-invoice-line:not(:first-child)').forEach(row=>row.remove());linesHost.querySelectorAll('.finance-invoice-line').forEach(row=>renderFinanceInvoiceLineTax(row));}
+     updateFinanceInvoicePreview();
+    }catch(uiError){if(feedback)feedback.textContent='Rascunho guardado. Actualize o formulário antes de criar outro documento.';}
+   }else{
+    toast('Rascunho guardado na instituição '+organizationName+'. A instituição/ecrã mudou durante a operação; confirme o documento no arquivo dessa instituição.');
+   }
+   toast('Rascunho da factura guardado.');
+   if(sameForm){
+    try{await loadFinanceWorkspace();}
+    catch(refreshError){if(feedback)feedback.textContent='Rascunho guardado. A lista não foi actualizada: '+(refreshError.message||'erro de actualização')+'. Não volte a submeter esta factura.';toast('A factura foi guardada, mas a lista não foi actualizada.','error');}
+   }
   }catch(err){const msg=financeInvoiceError(err.message);if(feedback)feedback.textContent=msg;toast(msg,'error');}
-  finally{if(button)button.disabled=false;}
+  finally{if(form)delete form.dataset.saving;if(button?.isConnected){button.disabled=false;button.textContent=originalButtonText;}}
  }
  async function issueFinanceInvoice(invoiceId,code){
   if(!financeWorkspace?.fiscal_ready){toast('A emissão está bloqueada: complete o perfil fiscal, o modelo FACTURA e a série comunicada à AGT.','error');return}
@@ -1714,6 +1745,8 @@ async function loadReceptionDocuments(){
  const titles={overview:'Painel geral',patients:'Pacientes',reception:'Recepção',emergency:'Urgência e Emergência',diagnostics:'Pedidos de diagnóstico',documents:'Documentos hospitalares',accounting:'Contabilidade',finance:'Financeiro e facturação',inpatient:'Internamento e camas',psychology:'Psicologia',clinical:'Processo clínico',staff:'Profissionais',definitions:'Definições técnicas',modules:'Todos os módulos',moduleWorkspace:'Módulo hospitalar'};
  function navigate(page){currentPage=page;$('topTitle').textContent=page==='moduleWorkspace'?((({nursing:'Enfermagem',pediatrics:'Pediatria',surgery:'Cirurgia / Bloco Operatório',maternity:'Maternidade',laboratory:'Laboratório',imaging:'Imagiologia',pharmacy:'Farmácia',rehabilitation:'Reabilitação',home_care:'Cuidados domiciliários'})[currentModuleCode])||'Módulo hospitalar'):(titles[page]||'NOVA HOSPITAL ERP');document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('pageContent').innerHTML=renderers[page]();bindPage();if(page==='overview')loadDashboardSummary();if(page==='documents')loadDocumentCenter().catch(err=>toast(err.message||'Falha ao abrir centro documental','error'));if(page==='finance')loadFinanceWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo financeiro','error'));if(page==='inpatient')loadInpatientWorkspace();if(page==='emergency')loadEmergencyWorkspace().catch(err=>toast(err.message||'Falha ao abrir urgência','error'));if(page==='diagnostics')loadDiagnosticWorkspace().catch(err=>toast(err.message||'Falha ao carregar pedidos diagnósticos','error'));if(page==='moduleWorkspace'&&currentModuleCode==='pharmacy')loadPharmacyWorkspace().catch(err=>toast(err.message||'Falha ao abrir farmácia','error'));if(page==='moduleWorkspace'&&currentModuleCode==='nursing')loadNursingWorkspace().catch(err=>toast(err.message||'Falha ao abrir enfermagem','error'));if(page==='accounting')loadAccountingWorkspace().catch(err=>toast(err.message||'Sem acesso ao módulo de contabilidade','error'));if(page==='definitions'){loadServiceTaxClassification().catch(err=>{const f=$('serviceTaxFeedback');if(f)f.textContent='Falha ao carregar serviços: '+(err.message||'erro desconhecido');});loadInstitutionalServiceCatalog().catch(err=>{const h=$('institutionalCatalogList');if(h)h.innerHTML='<div class="notice error">Falha ao carregar catálogo: '+esc(err.message||'erro desconhecido')+'</div>';});loadDocumentConfiguration().catch(err=>toast(err.message||'Falha ao carregar definições','error'));loadInstitutionSettings().catch(err=>toast(err.message||'Falha ao carregar cadastro institucional','error'));loadOrganizationPreferences().catch(err=>toast(err.message||'Falha ao carregar aparência','error'));}window.scrollTo(0,0)}
  function bindPage(){
+  // Liga os controlos da factura logo após o HTML surgir, mesmo que a carga do workspace falhe.
+  if($('financeInvoiceForm'))bindFinanceInvoiceForm();
   if($('nursingRefresh'))$('nursingRefresh').addEventListener('click',()=>loadNursingWorkspace().catch(err=>toast(err.message||'Falha ao actualizar enfermagem','error')));
   if($('nursingAssessmentForm'))$('nursingAssessmentForm').addEventListener('submit',e=>saveNursingAssessment(e).catch(err=>toast(err.message||'Falha ao guardar avaliação','error')));
   if($('emergencyFacility'))$('emergencyFacility').addEventListener('change',()=>{renderEmergencyDepartmentOptions();loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error'))});
