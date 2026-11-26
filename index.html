@@ -251,7 +251,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
 (() => {
  const PROJECT_URL='https://kpeoczaqxucumgunfweq.supabase.co';
  const DEFAULT_PUBLISHABLE_KEY='sb_publishable_9R24dJWZvB5fIJI-zUbDcA_dUAxjDSV';
- let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in', receptionDocumentTemplates=[], documentTemplatesCache=[], documentRows=[], documentAuditRows=[], documentCenterTemplates=[], documentCenterPatient=null, documentCenterRows=[], financeWorkspace=null, financePatient=null, financeQuoteRequest=0, financeQuoteTimer=null, financeCustomerSearchTimer=null, accountingWorkspace=null,pharmacyWorkspaceData={medications:[],suppliers:[],locations:[],lots:[],prescriptions:[],prescriptionItems:[],purchaseOrders:[]};
+ let supabase=null, currentUser=null, currentPage='overview', currentOrganizationId=null, userOrganizations=[], institutionBlueprint=null, activeModuleFilter=null, currentModuleCode='nursing', receptionPresetVisitType='walk_in', receptionDocumentTemplates=[], documentTemplatesCache=[], documentRows=[], documentAuditRows=[], documentCenterTemplates=[], documentCenterPatient=null, documentCenterRows=[], financeWorkspace=null, financePatient=null, financeQuoteRequest=0, financeQuoteTimer=null, financeCustomerSearchTimer=null, financeCustomerSearchRequest=0, accountingWorkspace=null,pharmacyWorkspaceData={medications:[],suppliers:[],locations:[],lots:[],prescriptions:[],prescriptionItems:[],purchaseOrders:[]};
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  window.novaLoginSubmit=async function(e){
@@ -1132,15 +1132,16 @@ async function loadReceptionDocuments(){
  async function searchFinanceCustomer(){
   const input=$('financeCustomerSearch'),host=$('financeCustomerResults'),button=$('financeSearchCustomer');
   if(!input||!host)return;
-  const q=input.value.trim();
+  const q=input.value.trim(),organizationId=org(),request=++financeCustomerSearchRequest;
   if(q.length<2){host.innerHTML='<div class="empty">Introduza pelo menos 2 caracteres para pesquisar.</div>';return;}
-  if(!org()){host.innerHTML='<div class="notice error">Seleccione uma instituição antes de pesquisar.</div>';return;}
+  if(!organizationId){host.innerHTML='<div class="notice error">Seleccione uma instituição antes de pesquisar.</div>';return;}
   if(button)button.disabled=true;
   host.innerHTML='<div class="empty">A pesquisar pacientes registados nesta instituição…</div>';
   try{
-   const result=await publicCall('api_finance_search_invoice_customer',{p_organization_id:org(),p_query:q,p_limit:20});
+   const result=await publicCall('api_finance_search_invoice_customer',{p_organization_id:organizationId,p_query:q,p_limit:20});
+   // Descarta respostas antigas: nunca substitui a pesquisa mais recente nem mistura instituições.
+   if(request!==financeCustomerSearchRequest||input.value.trim()!==q||org()!==organizationId)return;
    const rows=Array.isArray(result)?result:[];
-   if(input.value.trim()!==q)return;
    if(!rows.length){host.innerHTML='<div class="empty">Não foram encontrados pacientes com esse nome, número ou telefone.</div>';return;}
    host.innerHTML='<div class="table-wrap"><table><thead><tr><th>N.º paciente</th><th>Nome</th><th></th></tr></thead><tbody>'+
     rows.map((p,i)=>'<tr><td>'+esc(p.patient_number||'—')+'</td><td>'+esc(p.preferred_name||p.full_name||'Paciente')+'</td><td><button type="button" class="btn btn-outline small" data-finance-customer-index="'+i+'">Seleccionar</button></td></tr>').join('')+
@@ -1158,9 +1159,9 @@ async function loadReceptionDocuments(){
     updateFinanceInvoicePreview();
    }));
   }catch(err){
-   host.innerHTML='<div class="notice error">'+esc(financeInvoiceError(err.message)||'Falha na pesquisa de pacientes.')+'</div>';
+   if(request===financeCustomerSearchRequest)host.innerHTML='<div class="notice error">'+esc(financeInvoiceError(err.message)||'Falha na pesquisa de pacientes.')+'</div>';
   }finally{
-   if(button)button.disabled=false;
+   if(request===financeCustomerSearchRequest&&button)button.disabled=false;
   }
  }
  async function openFinanceCash(){
@@ -1193,15 +1194,30 @@ async function loadReceptionDocuments(){
   const preview=$('financePreviewInvoice');
   if(preview&&!preview.dataset.financeBound){preview.dataset.financeBound='1';preview.addEventListener('click',previewFinanceInvoice);}
   const searchCustomer=$('financeSearchCustomer');
-  if(searchCustomer&&!searchCustomer.dataset.financeBound){searchCustomer.dataset.financeBound='1';searchCustomer.addEventListener('click',searchFinanceCustomer);}
+  if(searchCustomer&&!searchCustomer.dataset.financeBound){
+   searchCustomer.dataset.financeBound='1';
+   searchCustomer.addEventListener('click',()=>{
+    if(financeCustomerSearchTimer)clearTimeout(financeCustomerSearchTimer);
+    searchFinanceCustomer();
+   });
+  }
   const customerQuery=$('financeCustomerSearch');
   if(customerQuery&&!customerQuery.dataset.financeSearchBound){
    customerQuery.dataset.financeSearchBound='1';
-   customerQuery.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(financeCustomerSearchTimer)clearTimeout(financeCustomerSearchTimer);searchFinanceCustomer();}});
+   customerQuery.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+     e.preventDefault();
+     if(financeCustomerSearchTimer)clearTimeout(financeCustomerSearchTimer);
+     searchFinanceCustomer();
+    }
+   });
    customerQuery.addEventListener('input',()=>{
     if(financeCustomerSearchTimer)clearTimeout(financeCustomerSearchTimer);
+    // Invalida resultados de pesquisas anteriores enquanto o utilizador continua a escrever.
+    financeCustomerSearchRequest++;
     const q=customerQuery.value.trim(),host=$('financeCustomerResults');
     if(q.length<2){if(host)host.innerHTML='';return;}
+    if(host)host.innerHTML='<div class="empty">A preparar pesquisa…</div>';
     financeCustomerSearchTimer=setTimeout(()=>searchFinanceCustomer(),350);
    });
   }
