@@ -562,7 +562,10 @@ async function loadReceptionDocuments(){
   if(job?.status==='issued'){ $('ipTransferDocumentStatus').innerHTML='<span class="status ok">Guia já emitida e arquivada.</span>';return {id:job.issued_document_id,document_number:'Documento já emitido'}; }
   if(!job){const {data:created,error:createError}=await queue.insert({organization_id:org(),facility_id:payload.facility_id,department_id:payload.department_id,admission_id:payload.admission_id,movement_id:payload.movement_id,patient_id:payload.patient_id,content_snapshot:payload.content,created_by:currentUser.id}).select('*').single();if(createError)throw createError;job=created;}
   try{
-   const result=await publicCall('api_issue_document',{p_organization_id:org(),p_document_code:'TRANSFERENCIA_CAMA',p_patient_id:job.patient_id,p_related_resource_type:'inpatient_bed_movement',p_related_resource_id:job.movement_id,p_content:job.content_snapshot});
+   const dateTo=new Date(Date.now()+86400000).toISOString(),dateFrom=new Date(Date.now()-365*86400000).toISOString();
+   const archive=await publicCall('api_list_accessible_issued_documents',{p_organization_id:org(),p_from:dateFrom,p_to:dateTo,p_limit:500});
+   let result=(archive||[]).find(d=>d.document_code==='TRANSFERENCIA_CAMA'&&d.related_resource_id===job.movement_id);
+   if(!result)result=await publicCall('api_issue_document',{p_organization_id:org(),p_document_code:'TRANSFERENCIA_CAMA',p_patient_id:job.patient_id,p_related_resource_type:'inpatient_bed_movement',p_related_resource_id:job.movement_id,p_content:job.content_snapshot});
    const {error:updateError}=await queue.update({status:'issued',issued_document_id:result.id,issued_at:new Date().toISOString(),attempts:(job.attempts||0)+1,last_error:null,updated_at:new Date().toISOString()}).eq('id',job.id).eq('status','pending');
    if(updateError)throw updateError;
    $('ipTransferDocumentStatus').innerHTML='<span class="status ok">Guia emitida e arquivada: '+esc(result.document_number||'Documento emitido')+'</span>';
