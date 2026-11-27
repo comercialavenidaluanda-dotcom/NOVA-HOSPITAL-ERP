@@ -268,6 +268,14 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
  function setScreen(id){['loginScreen','appScreen'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
   async function call(schema,name,args){const {data,error}=await supabase.schema(schema).rpc(name,args);if(error)throw error;return data}
  async function publicCall(name,args){const {data,error}=await supabase.rpc(name,args);if(error)throw error;return data}
+ // Preferências visuais são opcionais e nunca devem bloquear a abertura da instituição.
+ async function applySavedOrganizationTheme(){
+  const current=document.body?.dataset?.theme;
+  if(!['light','dark','system'].includes(current)&&document.body)document.body.dataset.theme='light';
+  return document.body?.dataset?.theme||'light';
+ }
+ // Compatibilidade segura enquanto não existe carregador de preferências persistidas nesta versão.
+ async function loadOrganizationPreferences(){return null;}
  async function loadOrganizations(preferredId=null){
   const rows=await publicCall('get_my_organizations',{});userOrganizations=Array.isArray(rows)?rows:[];
   if(!userOrganizations.length){currentOrganizationId=null;throw new Error('Esta conta ainda não está associada a uma instituição. Registe uma instituição ou contacte o administrador.');}
