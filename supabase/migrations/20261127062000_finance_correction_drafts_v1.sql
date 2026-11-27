@@ -62,6 +62,7 @@ BEGIN
  IF jsonb_typeof(p_items)<>'array' OR jsonb_array_length(p_items)=0 THEN
   RAISE EXCEPTION 'CORRECTION_ITEMS_REQUIRED' USING errcode='22023';
  END IF;
+ IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_items) e GROUP BY e.value->>'invoice_item_id' HAVING count(*)>1) THEN RAISE EXCEPTION 'DUPLICATE_ORIGINAL_INVOICE_ITEM'; END IF;
 
  SELECT * INTO v_original
  FROM finance.invoices
@@ -126,7 +127,7 @@ BEGIN
   WHERE organization_id=p_organization_id
     AND original_invoice_id=v_original.id
     AND invoice_type='credit_note'
-    AND status IN ('draft','issued');
+    AND status='draft';
   IF v_total_sum+v_existing_credit>v_original.balance_due THEN
    RAISE EXCEPTION 'CREDIT_NOTE_EXCEEDS_OUTSTANDING_BALANCE';
   END IF;
@@ -198,7 +199,6 @@ BEGIN
  );
 END;
 $function$
-
 
 REVOKE ALL ON FUNCTION public.api_finance_create_correction_draft(uuid,uuid,text,jsonb,text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.api_finance_create_correction_draft(uuid,uuid,text,jsonb,text) TO authenticated;
