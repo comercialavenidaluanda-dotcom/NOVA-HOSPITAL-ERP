@@ -289,3 +289,15 @@ BEGIN
 END;
 $function$
 ;
+
+
+-- Seed a non-certified producer runtime profile for homologation only.
+-- Official credentials, certificates and private keys remain unset.
+insert into fiscal.agt_producer_runtime(
+  singleton, product_id, product_version, schema_version, environment,
+  certification_status, producer_credentials_configured, producer_signing_key_configured
+) values (
+  true, 'NOVA HOSPITAL ERP', '1.0.0', '2.0', 'homologation',
+  'not_registered', false, false
+)
+on conflict (singleton) do nothing;
