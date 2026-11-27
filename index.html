@@ -1255,7 +1255,7 @@ async function loadReceptionDocuments(){
    if(desc){desc.value=opt.dataset.name||opt.textContent.split(' · ')[0];desc.readOnly=true;}
    if(price){price.value=Number(opt.dataset.price||0).toFixed(2);price.readOnly=true;}
    const status=opt.dataset.taxStatus||'pending';
-   set('.financeLineTaxType',opt.dataset.taxType||'IVA');
+   set('.financeLineTaxType',status==='configured'?(opt.dataset.taxType||'IVA'):'Pendente de classificação');
    set('.financeLineTaxCode',opt.dataset.taxCode||'—');
    const taxType=(opt.dataset.taxType||'').toLowerCase(),exemption=opt.dataset.taxExemption||'';
    const taxRate=opt.dataset.taxRate;
