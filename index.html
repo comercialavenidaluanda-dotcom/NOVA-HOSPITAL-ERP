@@ -1023,7 +1023,7 @@ async function loadReceptionDocuments(){
   const host=$('financeProformaArchive');if(!host)return;
   host.innerHTML='<div class="empty">A consultar documentos finalizados…</div>';
   try{
-   const end=new Date(),start=new Date(end);start.setUTCFullYear(start.getUTCFullYear()-5);
+   const end=new Date(),start=new Date(end);start.setUTCDate(start.getUTCDate()-1790);
    const rows=await publicCall('api_list_issued_documents',{p_organization_id:org(),p_from:start.toISOString(),p_to:end.toISOString(),p_document_code:'PROFORMA',p_limit:100,p_offset:0});
    const docs=Array.isArray(rows)?rows:[];
    host.innerHTML=docs.length?'<div class="table-wrap"><table><thead><tr><th>Data</th><th>Número</th><th>Adquirente</th><th>Estado</th><th></th></tr></thead><tbody>'+docs.map(d=>{const c=d.content_snapshot?.content||{};return '<tr><td>'+esc(d.issued_at?new Date(d.issued_at).toLocaleDateString('pt-AO'):'—')+'</td><td><b>'+esc(d.document_number||'—')+'</b></td><td>'+esc(c.customer_name||c.patient_name||'—')+'</td><td>'+esc(d.document_status||'issued')+'</td><td><button type="button" class="btn btn-outline small" data-finance-pf-print="'+esc(d.id)+'">Abrir / imprimir PDF</button></td></tr>';}).join('')+'</tbody></table></div>':'<div class="empty">Ainda não existem facturas proforma finalizadas neste arquivo.</div>';
