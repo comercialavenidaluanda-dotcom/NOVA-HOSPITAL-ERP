@@ -444,3 +444,84 @@ WHERE organization_id = '116dfb29-ec22-4aef-9eb3-cc5f5cd064eb'
 CREATE UNIQUE INDEX IF NOT EXISTS document_templates_org_nonfinancial_prefix_uq
 ON documents.document_templates (organization_id, numbering_prefix)
 WHERE category <> 'financial';
+
+
+-- PF / Proforma: finalização administrativa, sem série fiscal e sem transmissão AGT.
+create or replace function finance.finalize_proforma_internal(
+  p_organization_id uuid,
+  p_invoice_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_invoice finance.invoices%rowtype;
+  v_document jsonb;
+  v_content jsonb;
+  v_items jsonb;
+  v_patient jsonb;
+  v_settings documents.organization_document_settings%rowtype;
+begin
+  if auth.uid() is null
+     or not core.is_org_member(p_organization_id)
+     or not core.has_org_permission(p_organization_id,'finance.invoice.issue') then
+    raise exception 'INVOICE_ISSUE_PERMISSION_REQUIRED' using errcode='42501';
+  end if;
+  select * into v_invoice from finance.invoices
+  where id=p_invoice_id and organization_id=p_organization_id
+    and invoice_type='proforma' and status='draft' for update;
+  if not found then raise exception 'DRAFT_PROFORMA_NOT_FOUND'; end if;
+  if nullif(trim(v_invoice.customer_name),'') is null then raise exception 'PROFORMA_CUSTOMER_NAME_REQUIRED'; end if;
+  if not exists (select 1 from documents.document_templates
+    where organization_id=p_organization_id and document_code='PROFORMA'
+      and category='administrative' and enabled) then raise exception 'PROFORMA_TEMPLATE_DISABLED'; end if;
+  if not exists (select 1 from finance.invoice_items
+    where organization_id=p_organization_id and invoice_id=p_invoice_id) then raise exception 'PROFORMA_REQUIRES_ITEMS'; end if;
+  select * into v_settings from documents.organization_document_settings where organization_id=p_organization_id;
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'description',i.description,'quantity',i.quantity,'unit_price',i.unit_price,
+    'discount',i.discount_amount,'subtotal',i.line_subtotal,'tax',i.line_tax,
+    'tax_total',i.line_tax,'total',i.line_total,'tax_type',i.tax_type,
+    'tax_code',i.tax_code,'tax_rate',i.tax_rate,
+    'tax_exemption_code',i.tax_exemption_code,
+    'tax_exemption_reason',i.tax_exemption_reason,
+    'tax_legal_reference',i.tax_legal_reference
+  ) order by i.created_at,i.id),'[]'::jsonb) into v_items
+  from finance.invoice_items i
+  where i.organization_id=p_organization_id and i.invoice_id=p_invoice_id;
+  if v_invoice.patient_id is not null then
+    select jsonb_build_object('patient_id',r.id,'patient_number',r.patient_number,'patient_name',r.full_name)
+    into v_patient from patient.records r
+    where r.id=v_invoice.patient_id and r.organization_id=p_organization_id;
+  end if;
+  v_content:=jsonb_build_object(
+    'document_title','FACTURA PROFORMA','document_type','proforma',
+    'fiscal_document',false,'fiscal_issue',false,
+    'customer_name',v_invoice.customer_name,'customer_nif',v_invoice.customer_tax_id,
+    'currency','AOA','subtotal',v_invoice.subtotal,'discount_total',v_invoice.discount_total,
+    'tax_total',v_invoice.tax_total,'total_amount',v_invoice.total_amount,
+    'items',v_items,'notes',v_invoice.notes,'patient',v_patient,
+    'patient_name',v_patient->>'patient_name','patient_number',v_patient->>'patient_number',
+    'finance_invoice_id',v_invoice.id,'calculation_source','server_quote_saved_in_draft',
+    'notice','PROFORMA — documento comercial não fiscal; não comprova pagamento.'
+  );
+  v_document:=documents.issue_document_internal(p_organization_id,'PROFORMA',v_invoice.patient_id,
+    'finance_invoice',v_invoice.id,v_content);
+  update finance.invoices set issued_document_id=(v_document->>'id')::uuid,
+    invoice_number=v_document->>'document_number',status='issued',
+    issue_date=(now() at time zone coalesce(v_settings.timezone_name,'Africa/Luanda'))::date,
+    balance_due=0,updated_at=now()
+  where id=v_invoice.id and organization_id=p_organization_id returning * into v_invoice;
+  return jsonb_build_object('invoice',to_jsonb(v_invoice),'document',v_document,
+    'document_type','proforma','fiscal_issue',false,'agt_transmission_status','not_applicable');
+end;
+$$;
+
+create or replace function public.api_finance_finalize_proforma(p_organization_id uuid,p_invoice_id uuid)
+returns jsonb language sql security invoker set search_path=''
+as $$ select finance.finalize_proforma_internal($1,$2); $$;
+revoke all on function finance.finalize_proforma_internal(uuid,uuid) from public,anon,authenticated;
+grant execute on function finance.finalize_proforma_internal(uuid,uuid) to authenticated,service_role;
+revoke all on function public.api_finance_finalize_proforma(uuid,uuid) from public,anon;
+grant execute on function public.api_finance_finalize_proforma(uuid,uuid) to authenticated,service_role;
