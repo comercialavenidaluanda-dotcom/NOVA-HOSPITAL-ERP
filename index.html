@@ -557,7 +557,7 @@ async function loadReceptionDocuments(){
   const result=await publicCall('api_issue_document',{p_organization_id:org(),p_document_code:'TRANSFERENCIA_CAMA',p_patient_id:payload.patient_id,p_related_resource_type:'inpatient_bed_movement',p_related_resource_id:payload.movement_id,p_content:payload.content});
   pendingInpatientTransferDocument=null;
   $('ipTransferDocumentStatus').innerHTML='<span class="status ok">Guia emitida e arquivada: '+esc(result.document_number||'Documento emitido')+'</span>';
-  await printIssuedDocument(result);
+  try{await printIssuedDocument(result);}catch(printErr){$('ipTransferDocumentStatus').innerHTML+='<div class="small muted">Documento arquivado; não foi possível abrir a impressão automática. Utilize o arquivo documental para consultar e imprimir.</div>';}
   return result;
  }
  async function retryInpatientTransferDocument(){
