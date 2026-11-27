@@ -1111,6 +1111,7 @@ async function loadReceptionDocuments(){
   const notice=$('agtEngineNotice');if(notice)notice.innerHTML='<b>'+esc(labels[status]||status)+'</b><br>Protocolo/schema: '+esc(cfg.schema_version||'controlado no servidor')+'. '+(status==='approved'?'A certificação do produtor está registada; a emissão continua sujeita ao perfil fiscal e à série do contribuinte.':'O produtor NOVA HOSPITAL ERP não tem certificação AGT confirmada neste ambiente. A emissão fiscal electrónica permanece bloqueada até validação oficial.');
   const set=(id,v)=>{const e=$(id);if(e&&v!==undefined&&v!==null)e.value=v;};
   set('agtTaxpayerNif',cfg.taxpayer_nif);set('agtLegalName',cfg.legal_name);set('agtTaxRegime',cfg.tax_regime);set('agtVatStatus',cfg.vat_registration_status);syncAgtRegimeHelp();
+  if($('financeInvoiceLines')){document.querySelectorAll('#financeInvoiceLines .finance-invoice-line').forEach(renderFinanceInvoiceLineTax);updateFinanceInvoicePreview();}
   set('agtEnvironment',cfg.environment||'homologation');set('agtAdhesionDate',cfg.taxpayer_adhesion_date);
   set('agtProducerNif',cfg.software_producer_nif);set('agtValidationNumber',cfg.software_validation_number);
   set('agtCertificateReference',cfg.software_certificate_reference);set('agtSchemaVersion',cfg.schema_version||'2.0');
@@ -1270,6 +1271,11 @@ async function loadReceptionDocuments(){
   const select=row.querySelector('.financeLineService'),opt=select?.selectedOptions?.[0],hasService=!!select?.value;
   const set=(cls,value)=>{const el=row.querySelector(cls);if(el)el.value=value||'—';};
   const desc=row.querySelector('.financeLineDescription'),price=row.querySelector('.financeLinePrice');
+  if(agtWorkspace?.settings?.tax_regime==='EXCLUSAO'){
+   set('.financeLineTaxType','IVA - Regime de Exclusão');set('.financeLineTaxCode','—');set('.financeLineTaxRate','Não liquidado');set('.financeLineExemption','—');
+   const reason=row.querySelector('.financeLineTaxReason');if(reason){reason.textContent='IVA - Regime de Exclusão. Não se trata de uma isenção individual do serviço.';reason.classList.remove('danger');}
+   return;
+  }
   if(hasService&&opt){
    if(desc){desc.value=opt.dataset.name||opt.textContent.split(' · ')[0];desc.readOnly=true;}
    if(price){price.value=Number(opt.dataset.price||0).toFixed(2);price.readOnly=true;}
@@ -1355,10 +1361,11 @@ async function loadReceptionDocuments(){
    $('financeInvoiceSubtotal').textContent=moneyAOA(quote.subtotal);
    $('financeInvoiceDiscount').textContent=moneyAOA(quote.discount_total);
    const taxNotApplied=quote.tax_calculation_status==='not_applied_fiscal_profile_pending';
-   const taxLabel=taxNotApplied?'IVA não aplicado':(quote.tax_summary||[]).map(t=>String(t.tax_code||'')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').filter(Boolean).join(' · ');
+   const taxExclusion=quote.tax_calculation_status==='not_applicable_exclusion_regime';
+   const taxLabel=taxExclusion?'IVA - Regime de Exclusão':(taxNotApplied?'IVA não aplicado':(quote.tax_summary||[]).filter(t=>t.tax_code).map(t=>String(t.tax_code)+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').filter(Boolean).join(' · '));
    $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
    $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
-   if(status)status.textContent=taxNotApplied?'Cálculo comercial confirmado pelo servidor. O IVA está desactivado no perfil institucional e não foi calculado; confirme o enquadramento fiscal antes de emitir.':(!quote.tax_profile_ready?'Cálculo comercial do servidor · perfil fiscal por confirmar. Este rascunho não é factura fiscal.':(Number(quote.tax_total||0)===0?'Cálculo do servidor concluído · sem imposto liquidado nesta factura.':'Cálculo automático do servidor segundo o perfil fiscal e a classificação de cada serviço.'));
+   if(status)status.textContent=taxExclusion?'Cálculo do servidor confirmado: IVA não liquidado por Regime de Exclusão. Esta pré-visualização continua sem valor fiscal e a emissão em produção está bloqueada.':(taxNotApplied?'Cálculo comercial confirmado pelo servidor. O IVA está desactivado no perfil institucional e não foi calculado; confirme o enquadramento fiscal antes de emitir.':(!quote.tax_profile_ready?'Cálculo comercial do servidor · perfil fiscal por confirmar. Este rascunho não é factura fiscal.':(Number(quote.tax_total||0)===0?'Cálculo do servidor concluído · sem imposto liquidado nesta factura.':'Cálculo automático do servidor segundo o perfil fiscal e a classificação de cada serviço.')));
   }catch(err){
    if(request!==financeQuoteRequest)return;
    const message=financeInvoiceError(err.message);
@@ -1396,7 +1403,8 @@ async function loadReceptionDocuments(){
    const customer=$('financeCustomerName').value.trim()||financePatient?.name||'Adquirente por identificar';
    const contentItems=(quote.lines||[]).map(line=>({description:line.description,quantity:line.quantity,unit_price:line.unit_price,discount:line.discount_amount||0,tax_type:line.tax_type,tax_code:line.tax_code,tax_rate:line.tax_rate||0,tax_exemption_code:line.tax_exemption_code,tax_exemption_reason:line.tax_exemption_reason,tax_legal_reference:line.tax_legal_reference,tax:line.tax||0,total:line.total}));
    const now=new Date().toISOString();
-   const docType=$('financeDocumentType')?.value||'invoice';const labels={invoice:['FACTURA','Pré-visualização de factura'],invoice_receipt:['FACTURA_RECIBO','Pré-visualização de factura-recibo'],proforma:['FACTURA_PROFORMA','Pré-visualização de factura proforma'],quote:['ORCAMENTO','Pré-visualização de orçamento']};const meta=labels[docType]||labels.invoice;const d={document_code:meta[0],document_number:'PRÉ-VISUALIZAÇÃO — NÃO EMITIDA',issued_at:now,content_snapshot:{document_name:meta[1],issued_at:now,institution:{header_title:'NOVA CLÍNICA',footer_text:'PRÉ-VISUALIZAÇÃO — documento não emitido e sem valor fiscal'},content:{document_type:docType,customer_name:customer,customer_nif:$('financeCustomerNif').value.trim(),patient_name:financePatient?.name||null,currency:'AOA',subtotal:quote.subtotal,discount_total:quote.discount_total,tax_total:quote.tax_total,total_amount:quote.total,items:contentItems,notes:$('financeInvoiceNotes').value.trim(),calculation_source:'server_quote_only'}}};
+   const exclusion=quote.tax_calculation_status==='not_applicable_exclusion_regime';
+   const docType=$('financeDocumentType')?.value||'invoice';const labels={invoice:['FACTURA','Pré-visualização de factura'],invoice_receipt:['FACTURA_RECIBO','Pré-visualização de factura-recibo'],proforma:['FACTURA_PROFORMA','Pré-visualização de factura proforma'],quote:['ORCAMENTO','Pré-visualização de orçamento']};const meta=labels[docType]||labels.invoice;const d={document_code:meta[0],document_number:'PRÉ-VISUALIZAÇÃO — NÃO EMITIDA',issued_at:now,content_snapshot:{document_name:meta[1],issued_at:now,institution:{header_title:'NOVA CLÍNICA',footer_text:(exclusion?'IVA - Regime de Exclusão · ':'')+'PRÉ-VISUALIZAÇÃO — documento não emitido e sem valor fiscal'},content:{document_type:docType,customer_name:customer,customer_nif:$('financeCustomerNif').value.trim(),patient_name:financePatient?.name||null,currency:'AOA',subtotal:quote.subtotal,discount_total:quote.discount_total,tax_total:quote.tax_total,total_amount:quote.total,items:contentItems,notes:$('financeInvoiceNotes').value.trim(),calculation_source:'server_quote_only'}}};
    await printIssuedDocument(d);
   }catch(err){const msg=financeInvoiceError(err.message);toast(msg,'error');const fb=$('financeInvoiceFeedback');if(fb)fb.textContent=msg;}
  }
