@@ -525,3 +525,20 @@ revoke all on function finance.finalize_proforma_internal(uuid,uuid) from public
 grant execute on function finance.finalize_proforma_internal(uuid,uuid) to authenticated,service_role;
 revoke all on function public.api_finance_finalize_proforma(uuid,uuid) from public,anon;
 grant execute on function public.api_finance_finalize_proforma(uuid,uuid) to authenticated,service_role;
+
+
+-- Permitir estado issued apenas à PF não fiscal, mantendo OR como orçamento/rascunho.
+create or replace function finance.guard_non_invoice_fiscal_issue()
+returns trigger
+language plpgsql
+set search_path=''
+as $$
+begin
+ if new.status='issued'
+    and old.status is distinct from new.status
+    and new.invoice_type not in ('invoice','invoice_receipt','credit_note','debit_note','proforma') then
+   raise exception 'NON_FISCAL_DOCUMENT_CANNOT_BE_ISSUED_AS_INVOICE';
+ end if;
+ return new;
+end;
+$$;
