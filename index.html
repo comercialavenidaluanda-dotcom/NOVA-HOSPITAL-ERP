@@ -234,26 +234,34 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  window.novaLoginSubmit=async function(e){
   if(e)e.preventDefault();
-  const email=$('email').value.trim(),password=$('password').value,btn=$('loginBtn'),feedback=$('loginFeedback');
+  const email=$('email').value.trim().toLowerCase(),password=$('password').value,btn=$('loginBtn'),feedback=$('loginFeedback');
   let authenticated=false;
-  if(feedback){feedback.textContent='A autenticar…';feedback.classList.remove('hidden');feedback.style.background='#eef4fb';feedback.style.color='#243b53';}
-  if(!email||!password){if(feedback){feedback.textContent='Introduza o email e a palavra-passe.';feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast('Introduza o email e a palavra-passe.','error');return false;}
+  const showFeedback=(message,isError=false)=>{
+   if(!feedback){toast(message,isError?'error':'');return;}
+   feedback.textContent=message;feedback.classList.remove('hidden');
+   feedback.style.background=isError?'#fff0f0':'#eef4fb';
+   feedback.style.color=isError?'#8e3030':'#243b53';
+  };
+  if(!email||!password){showFeedback('Introduza o email e a palavra-passe.',true);return false;}
   if(btn)btn.disabled=true;
   try{
-   supabase=client();
-   const {data:{session},error:sessionError}=await supabase.auth.getSession();
-   if(sessionError)throw sessionError;
-   if(!session){
-    const {error}=await supabase.auth.signInWithPassword({email,password});
-    if(error)throw error;
-   }
+   const authClient=client();
+   showFeedback('A validar as credenciais no Supabase Auth…');
+   const {data:loginData,error:loginError}=await authClient.auth.signInWithPassword({email,password});
+   if(loginError)throw loginError;
+   if(!loginData?.user||!loginData?.session)throw new Error('O Supabase Auth não devolveu uma sessão válida.');
+   const {data:userData,error:userError}=await authClient.auth.getUser();
+   if(userError)throw userError;
+   if(!userData?.user||userData.user.id!==loginData.user.id)throw new Error('Não foi possível confirmar a identidade da sessão.');
    authenticated=true;
+   currentUser=userData.user;
+   showFeedback('Credenciais confirmadas. A carregar a instituição…');
    await startApp();
    if(feedback)feedback.classList.add('hidden');
   }catch(err){
    const message=err?.message||'Ocorreu um erro inesperado.';
-   const prefix=authenticated?'A sessão foi aceite, mas não foi possível carregar a clínica. Tente actualizar a página. ':'Não foi possível iniciar sessão: ';
-   if(feedback){feedback.textContent=prefix+message;feedback.classList.remove('hidden');feedback.style.background='#fff0f0';feedback.style.color='#8e3030';}else toast(prefix+message,'error');
+   const prefix=authenticated?'A conta foi autenticada, mas não foi possível carregar a instituição. ':'Não foi possível iniciar sessão: ';
+   showFeedback(prefix+message,true);
    $('email').value=email;
    if(!authenticated)$('password').value='';
    $('loginForm').classList.remove('hidden');
@@ -261,7 +269,7 @@ body[data-theme="dark"]{--bg:#101923;--card:#182635;--ink:#e8eff6;--muted:#a4b3c
    $('email').focus();
   }finally{if(btn)btn.disabled=false;}
   return false;
- };;
+ };
  const cfg=()=>({key:DEFAULT_PUBLISHABLE_KEY});
  const org=()=>currentOrganizationId;
  function toast(msg,kind=''){const t=$('toast');t.textContent=msg;t.className='toast';if(kind==='error')t.style.background='#8e3030';else t.style.background='#17283b';setTimeout(()=>t.classList.add('hidden'),4500)}
