@@ -1360,7 +1360,7 @@ async function loadReceptionDocuments(){
    INVALID_INVOICE_ITEM_VALUES:'Verifique quantidades, preços e descontos. O desconto não pode exceder o valor da linha.'
   };if(String(message||'').startsWith('SERVICE_TEST_PRICE_NOT_APPROVED'))return 'O preço deste serviço ainda está identificado como simulado. Confirme e aprove a tarifa real no catálogo antes da emissão fiscal.';if(String(message||'').startsWith('SERVICE_TAX_CLASSIFICATION_REQUIRED'))return 'O serviço seleccionado não tem classificação fiscal validada. Configure o código AGT, a taxa ou a isenção e a respectiva base legal no catálogo de serviços.';if(String(message||'').startsWith('VAT_EXEMPTION_DATA_INCOMPLETE'))return 'A isenção do serviço está incompleta. Confirme o código de isenção, o motivo e a norma legal no catálogo.';return map[message]||message||'Não foi possível guardar a factura.';
  }
- async async function previewFinanceInvoice(){
+ async function previewFinanceInvoice(){
   try{
    const rows=Array.from(document.querySelectorAll('#financeInvoiceLines .finance-invoice-line'));
    if(!rows.length)throw new Error('Adicione pelo menos um serviço ou artigo.');
