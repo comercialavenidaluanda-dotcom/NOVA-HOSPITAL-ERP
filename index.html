@@ -1269,23 +1269,30 @@ async function loadReceptionDocuments(){
  }
  function updateFinanceInvoicePreview(){
   const host=$('financeInvoiceLines');if(!host)return;
-  let subtotal=0,discountTotal=0,hasIncomplete=false;
+  let subtotal=0,discountTotal=0,hasIncomplete=false,lineCount=0;
   host.querySelectorAll('.finance-invoice-line').forEach(row=>{
    const service=row.querySelector('.financeLineService'),price=row.querySelector('.financeLinePrice');
-   const unit=service?.value?Number(service.selectedOptions[0]?.dataset.price||0):Number(price?.value||0);
+   const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
+   const priceRaw=price?.value??'';
+   // A linha inicial vazia não deve ser tratada como artigo incompleto.
+   if(!service?.value&&!description&&priceRaw==='')return;
+   lineCount++;
+   const unit=service?.value?Number(service.selectedOptions[0]?.dataset.price||0):Number(priceRaw||0);
    if(price){price.readOnly=!!service?.value;if(service?.value)price.value=unit.toFixed(2);}
    const qty=Number(row.querySelector('.financeLineQuantity')?.value||0);
    const discount=Number(row.querySelector('.financeLineDiscount')?.value||0);
-   const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
-   if(!service?.value&&(!description||!price?.value))hasIncomplete=true;
-   if(Number.isFinite(qty)&&qty>0&&Number.isFinite(unit)&&unit>=0){subtotal+=qty*unit;if(Number.isFinite(discount)&&discount>=0)discountTotal+=discount;}
+   const gross=qty*unit;
+   if(!service?.value&&(!description||priceRaw===''))hasIncomplete=true;
+   if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(unit)||unit<0||!Number.isFinite(discount)||discount<0||discount>gross)hasIncomplete=true;
+   if(Number.isFinite(gross)&&gross>=0)subtotal+=gross;
+   if(Number.isFinite(discount)&&discount>=0)discountTotal+=discount;
   });
   const out=$('financeInvoiceSubtotal');if(out)out.textContent=moneyAOA(subtotal);
   const discount=$('financeInvoiceDiscount');if(discount)discount.textContent=moneyAOA(discountTotal);
-  const tax=$('financeInvoiceTax');if(tax)tax.textContent='A validar no servidor…';
-  const total=$('financeInvoiceTotal');if(total)total.textContent='A validar no servidor…';
+  const tax=$('financeInvoiceTax');if(tax)tax.textContent=lineCount?(hasIncomplete?'A aguardar dados…':'A calcular no servidor…'):moneyAOA(0);
+  const total=$('financeInvoiceTotal');if(total)total.textContent=lineCount?(hasIncomplete?'A aguardar dados…':'A calcular no servidor…'):moneyAOA(0);
   const status=$('financeInvoiceCalculationStatus');
-  if(status)status.textContent=hasIncomplete?'Complete a descrição e o preço de cada artigo manual para calcular.':'A confirmar os valores no motor de cálculo do servidor…';
+  if(status)status.textContent=!lineCount?'Adicione um serviço ou artigo para iniciar o cálculo.':(hasIncomplete?'Complete a descrição, quantidade, preço e desconto (sem exceder o valor da linha).':'A confirmar os valores no motor de cálculo do servidor…');
   scheduleFinanceInvoiceQuote();
  }
  function scheduleFinanceInvoiceQuote(){
@@ -1312,9 +1319,11 @@ async function loadReceptionDocuments(){
    items.push({service_id:serviceId||null,description:serviceId?null:description,quantity,unit_price:serviceId?null:unitPrice,discount_amount:discount});
   });
   if(!items.length||incomplete){
-   if(status)status.textContent=items.length?'Complete os campos da linha em edição para actualizar o cálculo.':'Adicione um serviço ou artigo para calcular a factura.';
-   // Keep the visible commercial subtotal/discount preview; only server-only totals stay pending.
-   ['financeInvoiceTax','financeInvoiceTotal'].forEach(id=>{const el=$(id);if(el)el.textContent='—';});
+   if(status)status.textContent=items.length?'Complete os campos da linha em edição para actualizar o cálculo.':'Adicione um serviço ou artigo para iniciar o cálculo.';
+   const waiting=items.length>0;
+   const tax=$('financeInvoiceTax'),total=$('financeInvoiceTotal');
+   if(tax)tax.textContent=waiting?'A aguardar dados…':moneyAOA(0);
+   if(total)total.textContent=waiting?'A aguardar dados…':moneyAOA(0);
    return;
   }
   if(status)status.textContent='A calcular no motor fiscal do servidor…';
@@ -1323,10 +1332,11 @@ async function loadReceptionDocuments(){
    if(request!==financeQuoteRequest)return;
    $('financeInvoiceSubtotal').textContent=moneyAOA(quote.subtotal);
    $('financeInvoiceDiscount').textContent=moneyAOA(quote.discount_total);
-   const taxLabel=(quote.tax_summary||[]).map(t=>String(t.tax_code||'IVA')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').join(' · ');
+   const taxNotApplied=quote.tax_calculation_status==='not_applied_fiscal_profile_pending';
+   const taxLabel=taxNotApplied?'IVA não aplicado':(quote.tax_summary||[]).map(t=>String(t.tax_code||'')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').filter(Boolean).join(' · ');
    $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
    $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
-   if(status)status.textContent=!quote.tax_profile_ready?'Cálculo comercial do servidor · IVA não aplicado: seleccione e confirme o regime fiscal AGT da instituição. Este rascunho não é factura fiscal.':(Number(quote.tax_total||0)===0?'Regime fiscal reconhecido · sem IVA liquidado nesta factura ou serviços classificados como isentos. Cálculo do servidor.':'Cálculo automático do servidor segundo o perfil AGT e a classificação fiscal de cada serviço.');
+   if(status)status.textContent=taxNotApplied?'Cálculo comercial confirmado pelo servidor. O IVA está desactivado no perfil institucional e não foi calculado; confirme o enquadramento fiscal antes de emitir.':(!quote.tax_profile_ready?'Cálculo comercial do servidor · perfil fiscal por confirmar. Este rascunho não é factura fiscal.':(Number(quote.tax_total||0)===0?'Cálculo do servidor concluído · sem imposto liquidado nesta factura.':'Cálculo automático do servidor segundo o perfil fiscal e a classificação de cada serviço.'));
   }catch(err){
    if(request!==financeQuoteRequest)return;
    const message=financeInvoiceError(err.message);
@@ -1337,6 +1347,7 @@ async function loadReceptionDocuments(){
  }
  function financeInvoiceError(message){
   const map={
+   INVOICE_ISSUE_PERMISSION_REQUIRED:'A sua conta não tem permissão para calcular ou emitir facturas nesta instituição. Solicite ao administrador a permissão financeira adequada.',
    FISCAL_PROFILE_REQUIRED_CONFIGURE_DOCUMENT_SETTINGS:'Configure primeiro o perfil fiscal do emitente em Definições → Gestão documental.',
    FISCAL_TAX_PROFILE_INCOMPLETE:'O regime fiscal e a situação de IVA ainda não estão completos no perfil institucional.',
    FISCAL_TAX_CONFIGURATION_INCOMPLETE:'A taxa e o enquadramento de IVA precisam de ser confirmados em Gestão documental.',
