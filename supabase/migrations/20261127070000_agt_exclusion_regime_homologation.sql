@@ -424,3 +424,23 @@ begin
  return new;
 end;
 $function$;
+
+ 
+-- Prevent duplicate non-fiscal document numbers caused by colliding template
+-- prefixes. The template counter is independently locked and incremented by
+-- documents.issue_document_internal; prefixes must therefore be unique per
+-- organization across all non-financial templates.
+UPDATE documents.document_templates
+SET numbering_prefix = CASE document_code
+  WHEN 'PARTOGRAMA' THEN 'PTG'
+  WHEN 'RECLAMACAO' THEN 'RCLM'
+  WHEN 'REQUISICAO_EXAMES' THEN 'REX'
+  ELSE numbering_prefix
+END,
+updated_at = now()
+WHERE organization_id = '116dfb29-ec22-4aef-9eb3-cc5f5cd064eb'
+  AND document_code IN ('PARTOGRAMA','RECLAMACAO','REQUISICAO_EXAMES');
+
+CREATE UNIQUE INDEX IF NOT EXISTS document_templates_org_nonfinancial_prefix_uq
+ON documents.document_templates (organization_id, numbering_prefix)
+WHERE category <> 'financial';
