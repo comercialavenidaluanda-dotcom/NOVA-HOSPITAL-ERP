@@ -305,3 +305,48 @@ insert into fiscal.agt_producer_runtime(
   'not_registered', false, false
 )
 on conflict (singleton) do nothing;
+
+ 
+-- Prevent the generic document center from issuing financial documents.
+-- Invoices, receipts, credit notes and debit notes must pass through the
+-- dedicated finance finalization functions, which recalculate values and
+-- enforce fiscal-series, payment and correction controls.
+CREATE OR REPLACE FUNCTION public.api_issue_document(
+ p_organization_id uuid,p_document_code text,p_patient_id uuid,
+ p_related_resource_type text,p_related_resource_id uuid,p_content jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql SET search_path TO ''
+AS $function$
+declare v_template documents.document_templates%rowtype; v_permission text; v_professional jsonb;
+begin
+ if auth.uid() is null then raise exception 'AUTHENTICATION_REQUIRED' using errcode='28000'; end if;
+ if p_organization_id is null or not core.is_org_member(p_organization_id) then raise exception 'ORGANIZATION_ACCESS_DENIED' using errcode='42501'; end if;
+ select * into v_template from documents.document_templates
+ where organization_id=p_organization_id and document_code=upper(trim(p_document_code));
+ if not found then raise exception 'DOCUMENT_TEMPLATE_NOT_FOUND_OR_DISABLED' using errcode='P0002'; end if;
+ if v_template.category='financial' then
+  raise exception 'FINANCIAL_DOCUMENT_MUST_USE_FINANCE_FINALIZATION' using errcode='42501';
+ end if;
+ if not v_template.enabled then raise exception 'DOCUMENT_TEMPLATE_NOT_FOUND_OR_DISABLED' using errcode='P0002'; end if;
+ v_permission:=nullif(v_template.template_config->>'required_permission','');
+ if v_permission is not null then
+  if not (core.has_org_permission(p_organization_id,'documents.issue') or core.has_org_permission(p_organization_id,v_permission)) then
+   raise exception 'DOCUMENT_ISSUE_PERMISSION_REQUIRED' using errcode='42501';
+  end if;
+ elsif not (core.has_org_permission(p_organization_id,'documents.issue') or (v_template.category<>'financial' and core.has_org_permission(p_organization_id,'reception.queue.manage'))) then
+  raise exception 'DOCUMENT_ISSUE_PERMISSION_REQUIRED' using errcode='42501';
+ end if;
+ if coalesce((v_template.template_config->>'patient_required')::boolean,false) and p_patient_id is null then
+  raise exception 'PATIENT_REQUIRED_FOR_DOCUMENT' using errcode='22023';
+ end if;
+ if coalesce((v_template.template_config->>'requires_professional')::boolean,false) then
+  select jsonb_build_object('professional_id',p.id,'professional_name',p.full_name,'professional_code',p.professional_code,'license_number',p.license_number,'department_id',p.department_id)
+  into v_professional from hospital.professionals p
+  where p.organization_id=p_organization_id and p.user_id=auth.uid() and p.status='active'
+  order by p.created_at desc limit 1;
+  if v_professional is null then raise exception 'ACTIVE_HOSPITAL_PROFESSIONAL_PROFILE_REQUIRED' using errcode='42501'; end if;
+  p_content:=p_content || jsonb_build_object('responsible_professional',v_professional,'professional_validation_status','identified');
+ end if;
+ return documents.issue_document_internal(p_organization_id,p_document_code,p_patient_id,p_related_resource_type,p_related_resource_id,p_content);
+end;
+$function$;
