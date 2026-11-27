@@ -1587,25 +1587,28 @@ function renderEmergencyWorkspace(){return pageHead('Urgência e Emergência','G
    '</div><div class="field"><label>Observações clínicas</label><textarea id="nursingNotes" rows="3" maxlength="2000" placeholder="Descreva apenas observações objectivas e relevantes."></textarea></div>'+
    '<button class="btn btn-primary" type="submit">Guardar avaliação de enfermagem</button></form></section>'+
    '<section class="panel"><h2>Registos recentes de enfermagem</h2><div id="nursingAssessmentList" class="table-wrap"><div class="empty">A carregar registos…</div></div></section>'+
-   '<section class="panel"><h2>Passagem de turno</h2><p class="small muted">A estrutura segura de passagem de turno está preparada. A selecção de profissionais receptores e a confirmação bilateral serão ligadas na próxima etapa, sem permitir auto-confirmação.</p><div id="nursingHandoverList" class="table-wrap"><div class="empty">A carregar histórico…</div></div></section>';
+   '<section class="panel"><h2>Nova passagem de turno</h2><p class="small muted">A entrega fica associada ao internamento e só pode ser confirmada pelo profissional receptor seleccionado.</p><form id="nursingHandoverForm"><div class="form-grid"><div class="field"><label>Internamento activo *</label><select id="nursingHandoverAdmission" required><option value="">Seleccione o internamento</option></select></div><div class="field"><label>Turno *</label><select id="nursingHandoverShift" required><option value="day">Dia</option><option value="evening">Tarde</option><option value="night">Noite</option></select></div><div class="field"><label>Profissional que recebe *</label><select id="nursingHandoverRecipient" required><option value="">Seleccione primeiro o internamento</option></select></div></div><div class="field"><label>Resumo clínico da passagem *</label><textarea id="nursingHandoverSummary" rows="4" maxlength="5000" required placeholder="Estado actual, cuidados realizados e informação relevante para continuidade assistencial."></textarea></div><div class="field"><label>Tarefas pendentes</label><textarea id="nursingHandoverTasks" rows="3" maxlength="5000" placeholder="Exames pendentes, vigilância, medicação prescrita a administrar, reavaliações…"></textarea></div><div class="field"><label>Sinalizações de risco</label><div class="toolbar"><label><input type="checkbox" name="nursingRiskFlag" value="fall_risk"> Risco de queda</label><label><input type="checkbox" name="nursingRiskFlag" value="allergy"> Alergia</label><label><input type="checkbox" name="nursingRiskFlag" value="infection_control"> Controlo de infecção</label><label><input type="checkbox" name="nursingRiskFlag" value="pressure_injury"> Lesão por pressão</label><label><input type="checkbox" name="nursingRiskFlag" value="clinical_deterioration"> Risco de deterioração clínica</label></div></div><button class="btn btn-primary" type="submit">Registar entrega do turno</button></form></section>'+
+   '<section class="panel"><h2>Histórico de passagens de turno</h2><div id="nursingHandoverList" class="table-wrap"><div class="empty">A carregar histórico…</div></div></section>';
  }
  async function loadNursingWorkspace(){
   const host=$('nursingAssessmentList');if(!host)return;
   host.innerHTML='<div class="empty">A consultar internamentos e registos…</div>';
   const oid=org();
   const [admissions,assessments,handovers]=await Promise.all([
-   supabase.schema('hospital').from('inpatient_admissions').select('id,admission_number,patient_id,admitted_at').eq('organization_id',oid).eq('status','admitted').order('admitted_at',{ascending:false}).limit(100),
+   supabase.schema('hospital').from('inpatient_admissions').select('id,admission_number,patient_id,facility_id,department_id,admitted_at').eq('organization_id',oid).eq('status','admitted').order('admitted_at',{ascending:false}).limit(100),
    supabase.schema('hospital').from('nursing_assessments').select('id,admission_id,patient_id,systolic_bp,diastolic_bp,heart_rate,respiratory_rate,temperature_c,spo2_pct,pain_score,consciousness_level,notes,measured_at,recorded_by').eq('organization_id',oid).order('measured_at',{ascending:false}).limit(50),
-   supabase.schema('hospital').from('nursing_handovers').select('id,admission_id,shift_code,clinical_summary,pending_tasks,risk_flags,handed_over_at,acknowledged_at').eq('organization_id',oid).order('handed_over_at',{ascending:false}).limit(30)
+   supabase.schema('hospital').from('nursing_handovers').select('id,admission_id,shift_code,clinical_summary,pending_tasks,risk_flags,handed_over_at,acknowledged_at,outgoing_nurse_user_id,incoming_nurse_user_id').eq('organization_id',oid).order('handed_over_at',{ascending:false}).limit(30)
   ]);
   if(admissions.error)throw admissions.error;if(assessments.error)throw assessments.error;if(handovers.error)throw handovers.error;
   nursingAdmissions=admissions.data||[];nursingAssessments=assessments.data||[];nursingHandovers=handovers.data||[];
-  const select=$('nursingAdmission');
-  if(select)select.innerHTML='<option value="">Seleccione o internamento</option>'+nursingAdmissions.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.admission_number)+' · Paciente '+esc(a.patient_id.slice(0,8))+'</option>').join('');
+  const admissionOptions='<option value="">Seleccione o internamento</option>'+nursingAdmissions.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.admission_number)+' · Paciente '+esc(a.patient_id.slice(0,8))+'</option>').join('');
+  const select=$('nursingAdmission');if(select)select.innerHTML=admissionOptions;
+  const handoverAdmission=$('nursingHandoverAdmission');if(handoverAdmission)handoverAdmission.innerHTML=admissionOptions;
   $('nursingStats').innerHTML=stat('Internados activos',String(nursingAdmissions.length),'Admissões em curso')+stat('Avaliações registadas',String(nursingAssessments.length),'Últimos 50 registos')+stat('Passagens de turno',String(nursingHandovers.length),'Últimos 30 registos');
   const val=(x)=>x===null||x===undefined?'—':esc(x);
   $('nursingAssessmentList').innerHTML=nursingAssessments.length?'<table><thead><tr><th>Data/hora</th><th>Internamento</th><th>PA</th><th>FC</th><th>FR</th><th>Temp.</th><th>SpO₂</th><th>Dor</th><th>Observações</th></tr></thead><tbody>'+nursingAssessments.map(a=>'<tr><td>'+esc(new Date(a.measured_at).toLocaleString('pt-AO'))+'</td><td>'+esc((nursingAdmissions.find(x=>x.id===a.admission_id)||{}).admission_number||a.admission_id.slice(0,8))+'</td><td>'+val(a.systolic_bp)+'/'+val(a.diastolic_bp)+'</td><td>'+val(a.heart_rate)+'</td><td>'+val(a.respiratory_rate)+'</td><td>'+val(a.temperature_c)+'</td><td>'+val(a.spo2_pct)+'</td><td>'+val(a.pain_score)+'</td><td>'+val(a.notes)+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">Ainda não existem avaliações de enfermagem registadas.</div>';
-  $('nursingHandoverList').innerHTML=nursingHandovers.length?'<table><thead><tr><th>Data/hora</th><th>Internamento</th><th>Turno</th><th>Resumo clínico</th><th>Pendências</th><th>Confirmação</th></tr></thead><tbody>'+nursingHandovers.map(a=>'<tr><td>'+esc(new Date(a.handed_over_at).toLocaleString('pt-AO'))+'</td><td>'+esc(a.admission_id.slice(0,8))+'</td><td>'+esc(({day:'Dia',evening:'Tarde',night:'Noite'})[a.shift_code]||a.shift_code)+'</td><td>'+esc(a.clinical_summary)+'</td><td>'+val(a.pending_tasks)+'</td><td>'+ (a.acknowledged_at?'Confirmada':'Pendente')+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">Ainda não existem passagens de turno.</div>';
+  $('nursingHandoverList').innerHTML=nursingHandovers.length?'<div class="table-wrap"><table><thead><tr><th>Data/hora</th><th>Internamento</th><th>Turno</th><th>Resumo clínico</th><th>Pendências</th><th>Riscos</th><th>Confirmação</th></tr></thead><tbody>'+nursingHandovers.map(a=>'<tr><td>'+esc(new Date(a.handed_over_at).toLocaleString('pt-AO'))+'</td><td>'+esc((nursingAdmissions.find(x=>x.id===a.admission_id)||{}).admission_number||a.admission_id.slice(0,8))+'</td><td>'+esc(({day:'Dia',evening:'Tarde',night:'Noite'})[a.shift_code]||a.shift_code)+'</td><td>'+esc(a.clinical_summary)+'</td><td>'+val(a.pending_tasks)+'</td><td>'+esc((a.risk_flags||[]).join(', ')||'—')+'</td><td>'+(a.acknowledged_at?'<span class="status ok">Confirmada</span>':a.incoming_nurse_user_id===currentUser.id?'<button class="btn btn-primary small" type="button" data-nursing-ack="'+esc(a.id)+'">Confirmar recepção</button>':'<span class="status warn">A aguardar receptor</span>')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Ainda não existem passagens de turno.</div>';
+  $('nursingHandoverList').querySelectorAll('[data-nursing-ack]').forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;try{await publicCall('api_acknowledge_nursing_handover',{p_organization_id:org(),p_handover_id:btn.dataset.nursingAck});toast('Recepção do turno confirmada.');await loadNursingWorkspace()}catch(err){toast(err.message||'Não foi possível confirmar a passagem de turno.','error');btn.disabled=false}}));
  }
  async function saveNursingAssessment(e){
   e.preventDefault();
@@ -1616,6 +1619,24 @@ function renderEmergencyWorkspace(){return pageHead('Urgência e Emergência','G
   const btn=$('nursingAssessmentForm').querySelector('button[type="submit"]');if(btn)btn.disabled=true;
   try{await publicCall('api_record_nursing_assessment',{p_organization_id:org(),p_admission_id:admissionId,p_assessment:fields});$('nursingAssessmentForm').reset();toast('Avaliação de enfermagem registada.');await loadNursingWorkspace();}
   finally{if(btn)btn.disabled=false;}
+ }
+ async function loadNursingHandoverRecipients(){
+  const admissionId=$('nursingHandoverAdmission')?.value,select=$('nursingHandoverRecipient');if(!select)return;
+  select.innerHTML='<option value="">A carregar profissionais…</option>';select.disabled=true;
+  if(!admissionId){select.innerHTML='<option value="">Seleccione primeiro o internamento</option>';select.disabled=false;return;}
+  try{const rows=await publicCall('api_list_nursing_handover_recipients',{p_organization_id:org(),p_admission_id:admissionId});const recipients=Array.isArray(rows)?rows:[];select.innerHTML='<option value="">Seleccione o profissional receptor</option>'+recipients.map(x=>'<option value="'+esc(x.user_id)+'">'+esc(x.full_name)+' · '+esc(x.specialty||'Enfermagem')+'</option>').join('');if(!recipients.length)select.innerHTML='<option value="">Sem profissionais elegíveis nesta unidade/serviço</option>';}
+  catch(err){select.innerHTML='<option value="">Não foi possível carregar profissionais</option>';toast(err.message||'Falha ao carregar profissionais receptores.','error')}
+  finally{select.disabled=false}
+ }
+ async function saveNursingHandover(e){
+  e.preventDefault();const admissionId=$('nursingHandoverAdmission').value,recipient=$('nursingHandoverRecipient').value,summary=$('nursingHandoverSummary').value.trim();
+  if(!admissionId)throw new Error('Seleccione um internamento activo.');
+  if(!recipient)throw new Error('Seleccione o profissional que recebe o turno.');
+  if(summary.length<5)throw new Error('Descreva o resumo clínico da passagem de turno.');
+  const risks=[...document.querySelectorAll('input[name="nursingRiskFlag"]:checked')].map(x=>x.value);
+  const btn=$('nursingHandoverForm').querySelector('button[type="submit"]');if(btn)btn.disabled=true;
+  try{await publicCall('api_create_nursing_handover',{p_organization_id:org(),p_admission_id:admissionId,p_shift_code:$('nursingHandoverShift').value,p_incoming_nurse_user_id:recipient,p_clinical_summary:summary,p_pending_tasks:$('nursingHandoverTasks').value.trim()||null,p_risk_flags:risks});$('nursingHandoverForm').reset();$('nursingHandoverRecipient').innerHTML='<option value="">Seleccione primeiro o internamento</option>';toast('Entrega de turno registada. Aguarda confirmação do profissional receptor.');await loadNursingWorkspace();}
+  finally{if(btn)btn.disabled=false}
  }
  function renderModuleWorkspace(){
   if(currentModuleCode==='pharmacy')return renderPharmacyWorkspace();
@@ -1695,6 +1716,8 @@ function renderEmergencyWorkspace(){return pageHead('Urgência e Emergência','G
   if($('definitionsRefresh'))$('definitionsRefresh').addEventListener('click',()=>loadDefinitionsWorkspace().catch(err=>toast(err.message||'Falha ao actualizar definições','error')));
   if($('nursingRefresh'))$('nursingRefresh').addEventListener('click',()=>loadNursingWorkspace().catch(err=>toast(err.message||'Falha ao actualizar enfermagem','error')));
   if($('nursingAssessmentForm'))$('nursingAssessmentForm').addEventListener('submit',e=>saveNursingAssessment(e).catch(err=>toast(err.message||'Falha ao guardar avaliação','error')));
+  if($('nursingHandoverAdmission'))$('nursingHandoverAdmission').addEventListener('change',()=>loadNursingHandoverRecipients());
+  if($('nursingHandoverForm'))$('nursingHandoverForm').addEventListener('submit',e=>saveNursingHandover(e).catch(err=>toast(err.message||'Falha ao registar passagem de turno','error')));
   if($('emergencyFacility'))$('emergencyFacility').addEventListener('change',()=>{renderEmergencyDepartmentOptions();loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error'))});
   if($('emergencyDepartment'))$('emergencyDepartment').addEventListener('change',()=>loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error')));
   if($('emergencyDate'))$('emergencyDate').addEventListener('change',()=>loadEmergencyQueue().catch(err=>toast(err.message||'Falha na fila','error')));
