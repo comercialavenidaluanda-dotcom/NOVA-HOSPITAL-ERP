@@ -1085,7 +1085,7 @@ async function loadReceptionDocuments(){
     const id=$('billingCatalogServiceId').value;
     const duplicate=novaBillingCatalogRows.find(s=>s.service_code.toLocaleUpperCase('pt-AO')===payload.service_code&&s.id!==id);
     if(duplicate)throw new Error('Já existe um serviço com o código '+payload.service_code+'. Escolha outro código.');
-    const normalizeServiceName=value=>String(value||'').replace(/\\s+/g,' ').trim().toLocaleLowerCase('pt-AO');
+    const normalizeServiceName=value=>String(value||'').replace(/\s+/g,' ').trim().toLocaleLowerCase('pt-AO');
     const duplicateName=novaBillingCatalogRows.find(s=>s.id!==id&&s.status!=='archived'&&s.facility_id===payload.facility_id&&(s.department_id||'')===(payload.department_id||'')&&normalizeServiceName(s.name)===normalizeServiceName(payload.name));
     if(duplicateName)throw new Error('Já existe um serviço com este nome nesta unidade e departamento ('+duplicateName.service_code+'). Edite o serviço existente ou escolha outro nome.');
     if(!payload.facility_id||!payload.department_id)throw new Error('Seleccione a unidade hospitalar e o departamento.');
