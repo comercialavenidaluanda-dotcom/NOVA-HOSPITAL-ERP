@@ -350,3 +350,77 @@ begin
  return documents.issue_document_internal(p_organization_id,p_document_code,p_patient_id,p_related_resource_type,p_related_resource_id,p_content);
 end;
 $function$;
+
+ 
+-- Keep fiscal issuance disabled until the NOVA producer is explicitly
+-- switched to production and its certification, credentials and signing key
+-- have all been confirmed by the responsible authority.
+CREATE OR REPLACE FUNCTION fiscal.guard_and_track_issued_document()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'pg_catalog','documents','fiscal','extensions'
+AS $function$
+declare
+ v_category text;
+ v_settings fiscal.agt_settings%rowtype;
+ v_series documents.fiscal_series%rowtype;
+ v_runtime fiscal.agt_producer_runtime%rowtype;
+begin
+ if tg_op='INSERT' then
+  select category into v_category from documents.document_templates
+  where id=new.template_id and organization_id=new.organization_id;
+  if v_category='financial' then
+   select * into v_runtime from fiscal.agt_producer_runtime where singleton;
+   if not found or v_runtime.environment is distinct from 'production'
+     or v_runtime.certification_status is distinct from 'validated'
+     or not v_runtime.producer_credentials_configured
+     or not v_runtime.producer_signing_key_configured then
+    raise exception 'NOVA_FISCAL_PRODUCTION_LOCKED: o produtor NOVA HOSPITAL ERP ainda não está validado para produção.' using errcode='42501';
+   end if;
+   select * into v_settings from fiscal.agt_settings where organization_id=new.organization_id;
+   if not found or v_settings.status<>'approved'
+     or not v_settings.api_credentials_configured
+     or not v_settings.producer_signing_key_configured
+     or not v_settings.taxpayer_signing_key_configured
+     or nullif(v_settings.software_validation_number,'') is null
+     or nullif(v_settings.software_certificate_reference,'') is null then
+    raise exception 'AGT_CERTIFICATION_AND_CREDENTIALS_REQUIRED: emissão fiscal bloqueada até aprovação oficial do software, credenciais e chaves de assinatura.' using errcode='42501';
+   end if;
+   if new.series_id is null then raise exception 'AGT_FISCAL_SERIES_REQUIRED' using errcode='22023'; end if;
+   select * into v_series from documents.fiscal_series where id=new.series_id and organization_id=new.organization_id;
+   if not found or not v_series.active or not v_series.communicated_to_agt
+     or nullif(v_series.agt_communication_reference,'') is null then
+    raise exception 'AGT_SERIES_COMMUNICATION_REQUIRED: a série deve estar activa e comunicada à AGT.' using errcode='42501';
+   end if;
+  end if;
+  if new.content_snapshot is not null then
+   new.integrity_sha256:=encode(extensions.digest(convert_to(new.content_snapshot::text,'UTF8'),'sha256'),'hex');
+   new.integrity_hash_algorithm:='SHA-256';
+  end if;
+  return new;
+ elsif tg_op='UPDATE' then
+  if new.organization_id is distinct from old.organization_id
+   or new.template_id is distinct from old.template_id
+   or new.document_code is distinct from old.document_code
+   or new.document_number is distinct from old.document_number
+   or new.patient_id is distinct from old.patient_id
+   or new.series_id is distinct from old.series_id
+   or new.fiscal_year is distinct from old.fiscal_year
+   or new.series_code is distinct from old.series_code
+   or new.sequence_number is distinct from old.sequence_number
+   or new.content_snapshot is distinct from old.content_snapshot
+   or new.document_hash is distinct from old.document_hash
+   or new.integrity_sha256 is distinct from old.integrity_sha256
+   or new.issued_at is distinct from old.issued_at then
+   raise exception 'ISSUED_DOCUMENT_IMMUTABLE: não é permitido alterar os dados originais de um documento emitido.' using errcode='42501';
+  end if;
+  if old.document_status is distinct from new.document_status and new.document_status in ('voided','cancelled') then
+   insert into fiscal.document_lifecycle_events(organization_id,issued_document_id,event_type,actor_user_id,event_payload)
+   values(new.organization_id,new.id,'voided',auth.uid(),jsonb_build_object('reason',new.void_reason,'status',new.document_status));
+  end if;
+  return new;
+ end if;
+ return new;
+end;
+$function$;
