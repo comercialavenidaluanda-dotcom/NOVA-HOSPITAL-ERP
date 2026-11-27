@@ -1279,8 +1279,8 @@ async function loadReceptionDocuments(){
   }else{
    if(desc)desc.readOnly=false;
    if(price)price.readOnly=false;
-   set('.financeLineTaxType','Manual');set('.financeLineTaxCode','Pendente');set('.financeLineTaxRate','Perfil institucional');set('.financeLineExemption','Não definido');
-   const reason=row.querySelector('.financeLineTaxReason');if(reason)reason.textContent='Artigo manual sem classificação fiscal automática. Cadastre-o no catálogo institucional para aplicar o enquadramento correcto.';
+   set('.financeLineTaxType','Por definir');set('.financeLineTaxCode','—');set('.financeLineTaxRate','A confirmar');set('.financeLineExemption','—');
+   const reason=row.querySelector('.financeLineTaxReason');if(reason)reason.textContent='Seleccione um serviço do catálogo para preencher automaticamente o enquadramento fiscal.';
   }
  }
  function renderFinanceInvoiceQuoteTax(quote){
@@ -1346,7 +1346,7 @@ async function loadReceptionDocuments(){
   const tax=$('financeInvoiceTax');if(tax)tax.textContent=lineCount?(hasIncomplete?'A aguardar dados…':'A calcular no servidor…'):moneyAOA(0);
   const total=$('financeInvoiceTotal');if(total)total.textContent=lineCount?(hasIncomplete?'A aguardar dados…':'A calcular no servidor…'):moneyAOA(0);
   const status=$('financeInvoiceCalculationStatus');
-  if(status)status.textContent=!lineCount?'Adicione um serviço ou artigo para iniciar o cálculo.':(hasIncomplete?'Complete a descrição, quantidade, preço e desconto (sem exceder o valor da linha).':'A confirmar os valores no motor de cálculo do servidor…');
+  if(status)status.textContent=!lineCount?'Adicione um serviço ou artigo para iniciar o cálculo.':(hasIncomplete?'Complete a descrição, quantidade, preço e desconto (sem exceder o valor da linha).':'A calcular os valores da factura…');
   scheduleFinanceInvoiceQuote();
  }
  function scheduleFinanceInvoiceQuote(){
@@ -1392,7 +1392,7 @@ async function loadReceptionDocuments(){
    const taxLabel=taxNotApplied?'Perfil fiscal por confirmar':(taxExclusion?'Regime de Exclusão':(quote.tax_summary||[]).map(t=>String(t.tax_code||'')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').filter(Boolean).join(' · '));
    $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
    $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
-   if(status)status.textContent=taxNotApplied?'Cálculo comercial concluído. O enquadramento fiscal do emitente está pendente; o IVA não foi calculado.':(taxExclusion?'Perfil fiscal em Regime de Exclusão: IVA não liquidado e sem código de isenção atribuído ao serviço.':(!quote.tax_profile_ready?'Perfil fiscal por confirmar. Este documento permanece um rascunho comercial.':(Number(quote.tax_total||0)===0?'Cálculo concluído · sem imposto liquidado.':'Imposto calculado automaticamente segundo o perfil fiscal e a classificação de cada serviço.')));
+   if(status)status.textContent=taxNotApplied?'O regime fiscal do emitente precisa de confirmação. O imposto ainda não foi calculado.':(taxExclusion?'Regime de Exclusão: não há IVA a liquidar nesta factura.':(!quote.tax_profile_ready?'Confirme os dados fiscais do emitente antes de emitir o documento.':(Number(quote.tax_total||0)===0?'Valores calculados · sem imposto a liquidar.':'Imposto calculado automaticamente.')));
   }catch(err){
    if(request!==financeQuoteRequest)return;
    const message=financeInvoiceError(err.message);
