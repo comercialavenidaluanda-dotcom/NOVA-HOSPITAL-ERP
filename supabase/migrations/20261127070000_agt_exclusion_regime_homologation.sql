@@ -261,19 +261,23 @@ BEGIN
     ));
   END LOOP;
 
-  SELECT coalesce(jsonb_agg(jsonb_build_object(
-      'tax_code',g.tax_code,'tax_rate',g.tax_rate,
-      'taxable_base',g.taxable_base,'tax_amount',g.tax_amount
-    ) ORDER BY g.tax_code,g.tax_rate),'[]'::jsonb)
-  INTO v_tax_summary
-  FROM (
-    SELECT x->>'tax_code' AS tax_code,
-      (x->>'tax_rate')::numeric AS tax_rate,
-      sum((x->>'taxable_base')::numeric) AS taxable_base,
-      sum((x->>'tax')::numeric) AS tax_amount
-    FROM jsonb_array_elements(v_lines) x
-    GROUP BY x->>'tax_code',(x->>'tax_rate')::numeric
-  ) g;
+  IF v_tax_enabled THEN
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'tax_code',g.tax_code,'tax_rate',g.tax_rate,
+        'taxable_base',g.taxable_base,'tax_amount',g.tax_amount
+      ) ORDER BY g.tax_code,g.tax_rate),'[]'::jsonb)
+    INTO v_tax_summary
+    FROM (
+      SELECT x->>'tax_code' AS tax_code,
+        (x->>'tax_rate')::numeric AS tax_rate,
+        sum((x->>'taxable_base')::numeric) AS taxable_base,
+        sum((x->>'tax')::numeric) AS tax_amount
+      FROM jsonb_array_elements(v_lines) x
+      GROUP BY x->>'tax_code',(x->>'tax_rate')::numeric
+    ) g;
+  ELSE
+    v_tax_summary := '[]'::jsonb;
+  END IF;
 
   RETURN jsonb_build_object(
     'currency','AOA','subtotal',round(v_subtotal,2),'discount_total',round(v_discount_total,2),
