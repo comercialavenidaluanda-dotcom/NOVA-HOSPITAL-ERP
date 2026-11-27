@@ -1756,7 +1756,7 @@ function renderEmergencyWorkspace(){return pageHead('Urgência e Emergência','G
   if($('ipTransferForm'))$('ipTransferForm').addEventListener('submit',e=>transferInpatientBed(e).catch(err=>toast(err.message||'Falha na transferência','error')));
   if($('ipProgressForm'))$('ipProgressForm').addEventListener('submit',e=>recordInpatientProgress(e).catch(err=>toast(err.message||'Falha ao registar evolução','error')));
   if($('ipDischargeForm'))$('ipDischargeForm').addEventListener('submit',e=>dischargeInpatient(e).catch(err=>toast(err.message||'Falha na alta','error')));
-  if($('ipRefresh'))$('ipRefresh').addEventListener('click',()=>loadInpatientWorkspace());
+  if($('inpatientRefresh'))$('inpatientRefresh').addEventListener('click',()=>loadInpatientWorkspace().catch(err=>toast(err.message||'Falha ao actualizar internamento','error')));
   if($('ipFacility'))$('ipFacility').addEventListener('change',()=>{const ds=inpatientDepartments.filter(d=>d.facility_id===$('ipFacility').value&&d.department_type!=='administration');$('ipDepartment').innerHTML=ds.map(d=>'<option value="'+esc(d.department_id)+'">'+esc(d.department_name)+'</option>').join('');renderInpatientWorkspace();});
   if($('ipDepartment'))$('ipDepartment').addEventListener('change',renderInpatientWorkspace);
   if($('ipBedWard'))$('ipBedWard').addEventListener('change',()=>{const w=inpatientWards.find(x=>x.id===$('ipBedWard').value);$('ipBedRoom').innerHTML=inpatientRooms.filter(r=>r.ward_id===w?.id).map(r=>'<option value="'+esc(r.id)+'">'+esc(r.room_code)+' · '+esc(r.name||'Quarto')+'</option>').join('');});
