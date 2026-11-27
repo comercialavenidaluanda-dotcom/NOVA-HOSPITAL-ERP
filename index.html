@@ -1270,21 +1270,56 @@ async function loadReceptionDocuments(){
   if(hasService&&opt){
    if(desc){desc.value=opt.dataset.name||opt.textContent.split(' · ')[0];desc.readOnly=true;}
    if(price){price.value=Number(opt.dataset.price||0).toFixed(2);price.readOnly=true;}
-   const status=opt.dataset.taxStatus||'pending';
-   set('.financeLineTaxType',status==='configured'?(opt.dataset.taxType||'IVA'):'Pendente de classificação');
-   set('.financeLineTaxCode',opt.dataset.taxCode||'—');
-   const taxType=(opt.dataset.taxType||'').toLowerCase(),exemption=opt.dataset.taxExemption||'';
-   const taxRate=opt.dataset.taxRate;
-   set('.financeLineTaxRate',exemption?('Isento · '+exemption):(taxType.includes('sem')||taxType.includes('exempt')?'Sem IVA':(taxRate!==''?(Number(taxRate).toLocaleString('pt-AO')+'% IVA'):'Classificação pendente')));
-   set('.financeLineExemption',exemption||'Não aplicável');
+   set('.financeLineTaxType','A confirmar');
+   set('.financeLineTaxCode','—');
+   set('.financeLineTaxRate','A calcular');
+   set('.financeLineExemption','—');
    const reason=row.querySelector('.financeLineTaxReason');
-   if(reason){reason.textContent=status==='configured'?(opt.dataset.taxExemption?((opt.dataset.taxReason||'Isenção configurada')+' · '+(opt.dataset.taxLegal||'')):'Classificação fiscal configurada no catálogo.'):'ATENÇÃO: serviço sem classificação fiscal configurada. A emissão deverá aguardar a configuração em Definições.';reason.classList.toggle('danger',status!=='configured');}
+   if(reason){reason.textContent='A confirmar automaticamente o enquadramento fiscal do emitente e do serviço.';reason.classList.remove('danger');}
   }else{
    if(desc)desc.readOnly=false;
    if(price)price.readOnly=false;
    set('.financeLineTaxType','Manual');set('.financeLineTaxCode','Pendente');set('.financeLineTaxRate','Perfil institucional');set('.financeLineExemption','Não definido');
    const reason=row.querySelector('.financeLineTaxReason');if(reason)reason.textContent='Artigo manual sem classificação fiscal automática. Cadastre-o no catálogo institucional para aplicar o enquadramento correcto.';
   }
+ }
+ function renderFinanceInvoiceQuoteTax(quote){
+  const rows=Array.from(document.querySelectorAll('#financeInvoiceLines .finance-invoice-line')).filter(row=>{
+   const serviceId=row.querySelector('.financeLineService')?.value||'';
+   const description=row.querySelector('.financeLineDescription')?.value.trim()||'';
+   const priceRaw=row.querySelector('.financeLinePrice')?.value??'';
+   const discountRaw=row.querySelector('.financeLineDiscount')?.value??'';
+   return !!(serviceId||description||priceRaw!==''||(discountRaw!==''&&Number(discountRaw)!==0));
+  });
+  (quote.lines||[]).forEach((line,index)=>{
+   const row=rows[index];if(!row)return;
+   const set=(selector,value)=>{const el=row.querySelector(selector);if(el)el.value=value||'—';};
+   const reason=row.querySelector('.financeLineTaxReason');
+   const source=line.tax_source||'';
+   const lineStatus=line.tax_calculation_status||'';
+   if(source==='fiscal_exclusion_regime'||lineStatus==='not_applicable'){
+    set('.financeLineTaxType','Regime de Exclusão');
+    set('.financeLineTaxCode','Não aplicável');
+    set('.financeLineTaxRate','0% · IVA não liquidado');
+    set('.financeLineExemption','Não aplicável');
+    if(reason)reason.textContent='Perfil do emitente em Regime de Exclusão. Não foi atribuída uma isenção ao serviço.';
+   }else if(lineStatus==='not_applied'){
+    set('.financeLineTaxType','Por confirmar');
+    set('.financeLineTaxCode','—');
+    set('.financeLineTaxRate','Não calculada');
+    set('.financeLineExemption','—');
+    if(reason)reason.textContent='O perfil fiscal do emitente ainda precisa de confirmação antes do cálculo do imposto.';
+   }else{
+    const code=line.tax_code||'';
+    const rate=Number(line.tax_rate||0);
+    set('.financeLineTaxType',code==='OUT'?'Não sujeito':(line.tax_type||'IVA'));
+    set('.financeLineTaxCode',code||'—');
+    set('.financeLineTaxRate',code==='ISE'?'Isento · 0%':(code==='OUT'?'Não sujeito · 0%':rate.toLocaleString('pt-AO')+'% IVA'));
+    set('.financeLineExemption',code==='ISE'?(line.tax_exemption_code||'Pendente'):'Não aplicável');
+    if(reason)reason.textContent=code==='ISE'?(line.tax_exemption_reason||'Isenção aplicada conforme classificação do serviço.'):(code==='OUT'?'Operação fora do âmbito do IVA.':'Enquadramento fiscal aplicado automaticamente.');
+   }
+   if(reason)reason.classList.remove('danger');
+  });
  }
  function updateFinanceInvoicePreview(){
   const host=$('financeInvoiceLines');if(!host)return;
@@ -1349,13 +1384,15 @@ async function loadReceptionDocuments(){
   try{
    const quote=await publicCall('api_finance_calculate_invoice_quote',{p_organization_id:org(),p_items:items});
    if(request!==financeQuoteRequest)return;
+   renderFinanceInvoiceQuoteTax(quote);
    $('financeInvoiceSubtotal').textContent=moneyAOA(quote.subtotal);
    $('financeInvoiceDiscount').textContent=moneyAOA(quote.discount_total);
    const taxNotApplied=quote.tax_calculation_status==='not_applied_fiscal_profile_pending';
-   const taxLabel=taxNotApplied?'IVA não aplicado':(quote.tax_summary||[]).map(t=>String(t.tax_code||'')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').filter(Boolean).join(' · ');
+   const taxExclusion=quote.tax_calculation_status==='not_applicable_exclusion_regime';
+   const taxLabel=taxNotApplied?'Perfil fiscal por confirmar':(taxExclusion?'Regime de Exclusão':(quote.tax_summary||[]).map(t=>String(t.tax_code||'')+' '+Number(t.tax_rate||0).toLocaleString('pt-AO')+'%').filter(Boolean).join(' · '));
    $('financeInvoiceTax').textContent=moneyAOA(quote.tax_total)+(taxLabel?' · '+taxLabel:'');
    $('financeInvoiceTotal').textContent=moneyAOA(quote.total);
-   if(status)status.textContent=taxNotApplied?'Cálculo comercial confirmado pelo servidor. O IVA está desactivado no perfil institucional e não foi calculado; confirme o enquadramento fiscal antes de emitir.':(!quote.tax_profile_ready?'Cálculo comercial do servidor · perfil fiscal por confirmar. Este rascunho não é factura fiscal.':(Number(quote.tax_total||0)===0?'Cálculo do servidor concluído · sem imposto liquidado nesta factura.':'Cálculo automático do servidor segundo o perfil fiscal e a classificação de cada serviço.'));
+   if(status)status.textContent=taxNotApplied?'Cálculo comercial concluído. O enquadramento fiscal do emitente está pendente; o IVA não foi calculado.':(taxExclusion?'Perfil fiscal em Regime de Exclusão: IVA não liquidado e sem código de isenção atribuído ao serviço.':(!quote.tax_profile_ready?'Perfil fiscal por confirmar. Este documento permanece um rascunho comercial.':(Number(quote.tax_total||0)===0?'Cálculo concluído · sem imposto liquidado.':'Imposto calculado automaticamente segundo o perfil fiscal e a classificação de cada serviço.')));
   }catch(err){
    if(request!==financeQuoteRequest)return;
    const message=financeInvoiceError(err.message);
